@@ -7,7 +7,10 @@ version = "0.1.0"
 edition = "2024"
 license = "AGPL-3.0-or-later"
 repository = "https://github.com/IlleNilsson/xmip-core-identify"
-description = "Actor identification contracts for Xmip."
+description = "The Xmip identification gate: read the claim out of an arrival."
 
 [dependencies]
-xmip-party = { package = "xmip-core-party", git = "https://github.com/IlleNilsson/xmip-core-party", branch = "main" }
+xmip-core = { git = "https://github.com/IlleNilsson/xmip-core", branch = "main" }
+xmip-stream = { package = "xmip-core-stream", git = "https://github.com/IlleNilsson/xmip-core-stream", branch = "main" }
+xmip-message = { package = "xmip-core-message", git = "https://github.com/IlleNilsson/xmip-core-message", branch = "main" }
+xmip-context = { package = "xmip-core-context", git = "https://github.com/IlleNilsson/xmip-core-context", branch = "main" }

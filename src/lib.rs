@@ -305,7 +305,7 @@ pub fn identify_message(
 mod tests {
     use super::*;
     use xmip_context::MessageContext;
-    use xmip_core::{mechanism, MessageId, SectionId, StreamId};
+    use xmip_core::{MessageId, SectionId, StreamId, mechanism};
     use xmip_message::{
         ExecutionProfile, MessageDurability, MessagePriority, MessageSection, MessageTreatment,
     };
@@ -321,7 +321,10 @@ mod tests {
             self.mechanism.clone()
         }
 
-        fn identify(&self, arrival: &StreamArrival<'_>) -> Result<Option<Presented>, IdentifyError> {
+        fn identify(
+            &self,
+            arrival: &StreamArrival<'_>,
+        ) -> Result<Option<Presented>, IdentifyError> {
             Ok(arrival
                 .property(self.property)
                 .map(|value| Presented::passed(self.mechanism.clone(), value)))
@@ -355,7 +358,10 @@ mod tests {
             mechanism::mutual_tls()
         }
 
-        fn identify(&self, _arrival: &StreamArrival<'_>) -> Result<Option<Presented>, IdentifyError> {
+        fn identify(
+            &self,
+            _arrival: &StreamArrival<'_>,
+        ) -> Result<Option<Presented>, IdentifyError> {
             Err(IdentifyError {
                 message: "the certificate did not parse".to_string(),
             })
@@ -417,7 +423,12 @@ mod tests {
 
         let claims = identify_transport(
             &identifiers,
-            &StreamArrival::new(&stream, Arriving::Pushed, "https://xmip.example/invoices", &properties),
+            &StreamArrival::new(
+                &stream,
+                Arriving::Pushed,
+                "https://xmip.example/invoices",
+                &properties,
+            ),
         )
         .expect("read");
 
@@ -440,7 +451,12 @@ mod tests {
 
         let claims = identify_transport(
             &identifiers,
-            &StreamArrival::new(&stream, Arriving::Pushed, "https://xmip.example/invoices", &properties),
+            &StreamArrival::new(
+                &stream,
+                Arriving::Pushed,
+                "https://xmip.example/invoices",
+                &properties,
+            ),
         )
         .expect("read");
 
@@ -457,9 +473,12 @@ mod tests {
         let stream = stream(b"<order/>");
 
         assert!(
-            identify_transport(&identifiers, &StreamArrival::new(&stream, Arriving::Pushed, "file:///in/x", &[]))
-                .expect("read")
-                .is_empty()
+            identify_transport(
+                &identifiers,
+                &StreamArrival::new(&stream, Arriving::Pushed, "file:///in/x", &[])
+            )
+            .expect("read")
+            .is_empty()
         );
     }
 
@@ -472,8 +491,11 @@ mod tests {
         let identifiers: [&dyn TransportIdentifier; 1] = [&broken];
         let stream = stream(b"<order/>");
 
-        let failure = identify_transport(&identifiers, &StreamArrival::new(&stream, Arriving::Pushed, "file:///in/x", &[]))
-            .expect_err("should fail");
+        let failure = identify_transport(
+            &identifiers,
+            &StreamArrival::new(&stream, Arriving::Pushed, "file:///in/x", &[]),
+        )
+        .expect_err("should fail");
 
         assert_eq!(failure.to_string(), "the certificate did not parse");
     }

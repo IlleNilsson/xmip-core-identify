@@ -58,11 +58,11 @@
 //! identification applies. The gate is not skipped; it is asked, and may have
 //! nothing to say.
 
+use message::Message;
 use std::error::Error;
 use std::fmt;
-use xmip_core::{Arriving, Established, Layer, Mechanism};
-use xmip_message::Message;
-use xmip_stream::Stream;
+use stream::Stream;
+use xcore::{Arriving, Established, Layer, Mechanism};
 
 /// A Stream arriving, and everything readable about it before a Message exists.
 ///
@@ -116,7 +116,7 @@ impl<'a> StreamArrival<'a> {
     }
 
     /// Where it came from. The identity of a drop folder is its path, so this
-    /// is a claim on its own for [`xmip_core::mechanism::circumstance`].
+    /// is a claim on its own for [`xcore::mechanism::circumstance`].
     #[must_use]
     pub const fn source_uri(&self) -> &str {
         self.source_uri
@@ -304,11 +304,11 @@ pub fn identify_message(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use xmip_context::MessageContext;
-    use xmip_core::{MessageId, SectionId, StreamId, mechanism};
-    use xmip_message::{
+    use context::MessageContext;
+    use message::{
         ExecutionProfile, MessageDurability, MessagePriority, MessageSection, MessageTreatment,
     };
+    use xcore::{MessageId, SectionId, StreamId, mechanism};
 
     /// Reads one named transport property and calls it the claim.
     struct FromProperty {

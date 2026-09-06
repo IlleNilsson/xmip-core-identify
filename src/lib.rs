@@ -59,8 +59,6 @@
 //! nothing to say.
 
 use message::Message;
-use std::error::Error;
-use std::fmt;
 use stream::Stream;
 use xcore::{Arriving, Established, Layer, Mechanism};
 
@@ -204,18 +202,7 @@ impl Presented {
     }
 }
 
-#[derive(Debug)]
-pub struct IdentifyError {
-    pub message: String,
-}
-
-impl fmt::Display for IdentifyError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(&self.message)
-    }
-}
-
-impl Error for IdentifyError {}
+xcore::declare_error!(IdentifyError);
 
 /// Reads one mechanism's claim off the connection, before a Message exists.
 ///

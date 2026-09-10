@@ -1,0 +1,57 @@
+[submodule "xmip-core-identify-api-key"]
+	path = api-key
+	url = https://github.com/IlleNilsson/xmip-core-identify-api-key.git
+[submodule "xmip-core-identify-certificate"]
+	path = certificate
+	url = https://github.com/IlleNilsson/xmip-core-identify-certificate.git
+[submodule "xmip-core-identify-contract"]
+	path = contract
+	url = https://github.com/IlleNilsson/xmip-core-identify-contract.git
+[submodule "xmip-core-identify-cookie"]
+	path = cookie
+	url = https://github.com/IlleNilsson/xmip-core-identify-cookie.git
+[submodule "xmip-core-identify-dns"]
+	path = dns
+	url = https://github.com/IlleNilsson/xmip-core-identify-dns.git
+[submodule "xmip-core-identify-endpoint"]
+	path = endpoint
+	url = https://github.com/IlleNilsson/xmip-core-identify-endpoint.git
+[submodule "xmip-core-identify-header"]
+	path = header
+	url = https://github.com/IlleNilsson/xmip-core-identify-header.git
+[submodule "xmip-core-identify-ip"]
+	path = ip
+	url = https://github.com/IlleNilsson/xmip-core-identify-ip.git
+[submodule "xmip-core-identify-jwt"]
+	path = jwt
+	url = https://github.com/IlleNilsson/xmip-core-identify-jwt.git
+[submodule "xmip-core-identify-kerberos"]
+	path = kerberos
+	url = https://github.com/IlleNilsson/xmip-core-identify-kerberos.git
+[submodule "xmip-core-identify-mac"]
+	path = mac
+	url = https://github.com/IlleNilsson/xmip-core-identify-mac.git
+[submodule "xmip-core-identify-message"]
+	path = message
+	url = https://github.com/IlleNilsson/xmip-core-identify-message.git
+[submodule "xmip-core-identify-ntlm"]
+	path = ntlm
+	url = https://github.com/IlleNilsson/xmip-core-identify-ntlm.git
+[submodule "xmip-core-identify-oidc"]
+	path = oidc
+	url = https://github.com/IlleNilsson/xmip-core-identify-oidc.git
+[submodule "xmip-core-identify-party"]
+	path = party
+	url = https://github.com/IlleNilsson/xmip-core-identify-party.git
+[submodule "xmip-core-identify-saml"]
+	path = saml
+	url = https://github.com/IlleNilsson/xmip-core-identify-saml.git
+[submodule "xmip-core-identify-ssh-key"]
+	path = ssh-key
+	url = https://github.com/IlleNilsson/xmip-core-identify-ssh-key.git
+[submodule "xmip-core-identify-transport"]
+	path = transport
+	url = https://github.com/IlleNilsson/xmip-core-identify-transport.git
+[submodule "xmip-core-identify-username"]
+	path = username
+	url = https://github.com/IlleNilsson/xmip-core-identify-username.git

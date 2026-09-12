@@ -1,2 +1,2 @@
-# xmip-identify
+# xmip-core-identify
 Identifies Actors interacting with Xmip.

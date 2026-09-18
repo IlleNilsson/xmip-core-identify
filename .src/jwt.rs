@@ -77,6 +77,35 @@ impl Compact {
         number_claim(&self.claims, name)
     }
 
+    /// The principal name the token carries, where it carries one
+    /// (ADR-0054): a user's under `upn`, else `preferred_username`; an
+    /// application's under `azp`, else `appid`, where the token is an
+    /// application's — `idtyp` is `app`, or it names no user at all. An
+    /// opaque identifier is not a principal name and yields nothing. Here
+    /// because `jwt` and `oidc` both need it and neither may copy the other
+    /// (ADR-0044).
+    #[must_use]
+    pub fn principal(&self) -> Option<crate::PrincipalName> {
+        let users: Vec<String> = ["upn", "preferred_username"]
+            .iter()
+            .filter_map(|claim| self.claim(claim))
+            .collect();
+        let application = self.claim("idtyp").as_deref() == Some("app");
+
+        if !application && !users.is_empty() {
+            return users
+                .iter()
+                .find_map(|text| crate::UserPrincipalName::parse(text))
+                .map(crate::PrincipalName::User);
+        }
+
+        ["azp", "appid"]
+            .iter()
+            .filter_map(|claim| self.claim(claim))
+            .find_map(|text| crate::ServicePrincipalName::parse(&text))
+            .map(crate::PrincipalName::Service)
+    }
+
     /// A claim that is a string or an array of strings — `aud`, `scope`
     /// split on spaces, `roles`.
     #[must_use]

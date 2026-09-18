@@ -58,7 +58,10 @@
 //! identification applies. The gate is not skipped; it is asked, and may have
 //! nothing to say.
 
+pub mod jwt;
+
 use message::Message;
+use std::fmt;
 use stream::Stream;
 use xcore::{Arriving, Established, Layer, Mechanism};
 
@@ -137,10 +140,11 @@ impl<'a> StreamArrival<'a> {
 
 /// A claim, read out of an arrival and not yet proven.
 ///
-/// This is what the second gate is handed. The secret does not appear here —
-/// whatever proves the claim belongs to the module that implements the
-/// mechanism, not to the thing that read the name.
-#[derive(Clone, Debug, Eq, PartialEq)]
+/// This is what the second gate is handed. The secret does not appear on the
+/// record — whatever proves the claim rides in [`Presented::proof`], which the
+/// gate hands to the authenticator of the same mechanism and to nothing else:
+/// it is never copied onto the identity, never printed, never compared.
+#[derive(Clone, Eq, PartialEq)]
 pub struct Presented {
     pub mechanism: Mechanism,
     /// The claimed value — `CN=partner-x.example`, `sub=partner-x`,
@@ -156,6 +160,25 @@ pub struct Presented {
     /// What was observed alongside it. Goes onto the record whether or not the
     /// claim holds.
     pub evidence: Vec<(String, String)>,
+    /// What proves it, under names the mechanism owns — `basic.credential`,
+    /// `digest.response`, `ntlm.authenticate`, `jwt.token`. Read by the
+    /// authenticator of the same mechanism; never on the record.
+    proof: Vec<(String, String)>,
+}
+
+impl fmt::Debug for Presented {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Presented")
+            .field("mechanism", &self.mechanism)
+            .field("value", &self.value)
+            .field("established", &self.established)
+            .field("evidence", &self.evidence)
+            .field(
+                "proof",
+                &self.proof.iter().map(|(name, _)| name).collect::<Vec<_>>(),
+            )
+            .finish()
+    }
 }
 
 impl Presented {
@@ -185,6 +208,7 @@ impl Presented {
             value: value.into(),
             established,
             evidence: Vec::new(),
+            proof: Vec::new(),
         }
     }
 
@@ -192,6 +216,22 @@ impl Presented {
     pub fn with_evidence(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
         self.evidence.push((name.into(), value.into()));
         self
+    }
+
+    /// Attach what proves the claim. Not evidence: it never reaches the record.
+    #[must_use]
+    pub fn with_proof(mut self, name: impl Into<String>, value: impl Into<String>) -> Self {
+        self.proof.push((name.into(), value.into()));
+        self
+    }
+
+    /// What was attached under this name, for the authenticator that owns it.
+    #[must_use]
+    pub fn proof(&self, name: &str) -> Option<&str> {
+        self.proof
+            .iter()
+            .find(|(candidate, _)| candidate == name)
+            .map(|(_, value)| value.as_str())
     }
 
     /// Which gate produced it. Comes from the mechanism, so a claim cannot

@@ -18,3 +18,5 @@ xcore = { package = "xmip-core", git = "https://github.com/IlleNilsson/xmip-core
 stream = { package = "xmip-core-stream", git = "https://github.com/IlleNilsson/xmip-core-stream", branch = "main" }
 message = { package = "xmip-core-message", git = "https://github.com/IlleNilsson/xmip-core-message", branch = "main" }
 context = { package = "xmip-core-context", git = "https://github.com/IlleNilsson/xmip-core-context", branch = "main" }
+# RFC 7515 base64url, for the compact token the jwt and oidc technologies read.
+base64 = "0.22"

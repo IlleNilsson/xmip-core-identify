@@ -59,6 +59,9 @@
 //! nothing to say.
 
 pub mod jwt;
+pub mod principal;
+
+pub use principal::{PrincipalName, ServicePrincipalName, UserPrincipalName};
 
 use message::Message;
 use std::fmt;

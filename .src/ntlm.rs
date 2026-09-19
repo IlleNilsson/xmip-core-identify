@@ -12,7 +12,10 @@
 //! the target server, UTF-16 and not null-terminated. `MsvAvFlags`, 0x0006,
 //! carries a bit, 0x4, that says the client took that name from an
 //! untrusted source; section 3.2.5.1.2 has a server treat such a name as no
-//! name at all, and [`ClientChallenge::supplied_target`] does.
+//! name at all, and [`ClientChallenge::supplied_target`] does. The same flags
+//! carry 0x2, which says the AUTHENTICATE message has a MIC, and
+//! `MsvAvChannelBindings`, 0x000A, is the MD5 of the channel the client
+//! spoke over, sixteen bytes and all zero where it bound to none.
 //!
 //! Here because both gates read it and neither may copy the other
 //! (ADR-0044): the first gate writes the target as evidence, the second holds
@@ -27,6 +30,8 @@ const TIMESTAMP: usize = 8;
 const END_OF_LIST: u16 = 0x0000;
 const FLAGS: u16 = 0x0006;
 const TARGET_NAME: u16 = 0x0009;
+const CHANNEL_BINDINGS: u16 = 0x000A;
+const HAS_INTEGRITY: u32 = 0x0000_0002;
 const UNTRUSTED_SOURCE: u32 = 0x0000_0004;
 
 /// Seconds between 1601-01-01 and the Unix epoch.
@@ -48,6 +53,11 @@ pub struct ClientChallenge {
     pub target: Option<String>,
     /// Whether the client says it took that name from an untrusted source.
     pub untrusted: bool,
+    /// Whether the client says its AUTHENTICATE message carries a MIC.
+    pub integrity: bool,
+    /// The hash of the channel the client bound the response to, where it
+    /// bound to one: all zero on the wire is none.
+    pub channel: Option<[u8; 16]>,
 }
 
 /// An attribute's identifier, its value, and the bytes after it.
@@ -89,6 +99,12 @@ impl ClientChallenge {
                         u32::from_le_bytes([quad[0], quad[1], quad[2], quad[3]])
                     });
                     read.untrusted = flags & UNTRUSTED_SOURCE != 0;
+                    read.integrity = flags & HAS_INTEGRITY != 0;
+                }
+                CHANNEL_BINDINGS => {
+                    read.channel = <[u8; 16]>::try_from(value)
+                        .ok()
+                        .filter(|hash| hash != &[0u8; 16]);
                 }
                 _ => {}
             }
@@ -152,6 +168,17 @@ fn utf16(value: &[u8]) -> Result<String, IdentifyError> {
 /// twice drifts; it builds bytes and verifies nothing.
 #[must_use]
 pub fn blob_for(unix_seconds: u64, target: Option<&str>, flags: u32) -> Vec<u8> {
+    blob_bound(unix_seconds, target, flags, None)
+}
+
+/// The same, bound to a channel where one is given.
+#[must_use]
+pub fn blob_bound(
+    unix_seconds: u64,
+    target: Option<&str>,
+    flags: u32,
+    channel: Option<[u8; 16]>,
+) -> Vec<u8> {
     let ticks = (unix_seconds + EPOCH_GAP) * TICKS_PER_SECOND;
     let mut blob = vec![1, 1, 0, 0, 0, 0, 0, 0];
     blob.extend_from_slice(&ticks.to_le_bytes());
@@ -172,6 +199,9 @@ pub fn blob_for(unix_seconds: u64, target: Option<&str>, flags: u32) -> Vec<u8> 
 
     if let Some(target) = target {
         push(TARGET_NAME, &utf16(target));
+    }
+    if let Some(channel) = channel {
+        push(CHANNEL_BINDINGS, &channel);
     }
 
     push(END_OF_LIST, &[]);
@@ -203,6 +233,23 @@ mod tests {
         assert!(read.untrusted);
         assert_eq!(read.target.as_deref(), Some("HTTP/xmip.example"));
         assert_eq!(read.supplied_target(), None);
+    }
+
+    #[test]
+    fn the_mic_flag_and_the_channel_are_read_and_a_zero_channel_is_none() {
+        let bound = blob_bound(THEN, None, 0x2, Some([0xC4; 16]));
+        let read = ClientChallenge::read(&bound)
+            .expect("read")
+            .expect("NTLMv2");
+        assert!(read.integrity);
+        assert_eq!(read.channel, Some([0xC4; 16]));
+
+        let unbound = blob_bound(THEN, None, 0, Some([0; 16]));
+        let read = ClientChallenge::read(&unbound)
+            .expect("read")
+            .expect("NTLMv2");
+        assert!(!read.integrity);
+        assert_eq!(read.channel, None);
     }
 
     #[test]

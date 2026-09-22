@@ -61,7 +61,6 @@
 pub mod authorization;
 pub mod jwt;
 pub mod ntlm;
-pub mod peer;
 pub mod principal;
 pub mod saml;
 
@@ -250,6 +249,13 @@ impl Presented {
 }
 
 xcore::declare_error!(IdentifyError);
+
+/// An address that is not one, in what a technology reads.
+impl From<net::NetError> for IdentifyError {
+    fn from(error: net::NetError) -> Self {
+        Self::new(error.message)
+    }
+}
 
 /// Text that is not the encoding it claims, in what a technology reads.
 impl From<codec::CodecError> for IdentifyError {

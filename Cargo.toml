@@ -23,5 +23,7 @@ context = { package = "xmip-core-context", git = "https://github.com/IlleNilsson
 asn1 = { package = "xmip-core-asn1", git = "https://github.com/IlleNilsson/xmip-core-asn1", branch = "main" }
 # Encoding primitives, whose failures this crate's error takes with `From`.
 codec = { package = "xmip-core-codec", git = "https://github.com/IlleNilsson/xmip-core-codec", branch = "main" }
+# Network primitives, whose failures this crate's error takes with `From`.
+net = { package = "xmip-core-net", git = "https://github.com/IlleNilsson/xmip-core-net", branch = "main" }
 # RFC 7515 base64url, for the compact token the jwt and oidc technologies read.
 base64 = "0.22"

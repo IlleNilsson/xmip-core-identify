@@ -63,6 +63,7 @@ pub mod jwt;
 pub mod ntlm;
 pub mod peer;
 pub mod principal;
+pub mod saml;
 
 pub use principal::{PrincipalName, ServicePrincipalName, UserPrincipalName};
 
@@ -249,6 +250,13 @@ impl Presented {
 }
 
 xcore::declare_error!(IdentifyError);
+
+/// Text that is not the encoding it claims, in what a technology reads.
+impl From<codec::CodecError> for IdentifyError {
+    fn from(error: codec::CodecError) -> Self {
+        Self::new(error.message)
+    }
+}
 
 /// X.690 that is not what it says it is, in a token a technology reads.
 impl From<asn1::Asn1Error> for IdentifyError {

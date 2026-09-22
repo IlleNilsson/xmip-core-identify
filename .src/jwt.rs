@@ -114,6 +114,34 @@ impl Compact {
     }
 }
 
+/// Three parts around two dots and no whitespace: the shape RFC 7515 gives a
+/// compact serialization, and the test that tells a JWT from an opaque token.
+#[must_use]
+pub fn is_compact(token: &str) -> bool {
+    token.split('.').count() == 3 && !token.contains(char::is_whitespace) && !token.is_empty()
+}
+
+/// The compact token a property carries: after `scheme` where one is named
+/// (`Bearer`, compared without regard to case), the whole value where none
+/// is, and nothing where the value is not a compact token. Both
+/// technologies that read a token off a header read it this way, and each
+/// carried its own copy until 2026-09-22.
+#[must_use]
+pub fn carried<'a>(raw: &'a str, scheme: Option<&str>) -> Option<&'a str> {
+    let raw = raw.trim();
+    let token = match scheme {
+        Some(scheme) => {
+            let (found, rest) = raw.split_once(char::is_whitespace)?;
+            if !found.eq_ignore_ascii_case(scheme) {
+                return None;
+            }
+            rest.trim()
+        }
+        None => raw,
+    };
+    is_compact(token).then_some(token)
+}
+
 /// Decode base64url without padding, as RFC 7515 section 2 spells it.
 ///
 /// # Errors
@@ -242,6 +270,15 @@ fn strings_claim(json: &str, name: &str) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_token_is_carried_under_its_scheme_or_bare_and_an_opaque_one_is_not() {
+        assert_eq!(carried(" bearer a.b.c ", Some("Bearer")), Some("a.b.c"));
+        assert_eq!(carried("a.b.c", None), Some("a.b.c"));
+        assert_eq!(carried("Basic a.b.c", Some("Bearer")), None);
+        assert_eq!(carried("Bearer opaque", Some("Bearer")), None);
+        assert_eq!(carried("Bearer a.b.c", None), None);
+    }
 
     fn token(header: &str, claims: &str) -> String {
         format!(

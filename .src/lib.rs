@@ -60,6 +60,7 @@
 
 pub mod jwt;
 pub mod ntlm;
+pub mod peer;
 pub mod principal;
 
 pub use principal::{PrincipalName, ServicePrincipalName, UserPrincipalName};

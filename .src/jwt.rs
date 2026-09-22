@@ -128,16 +128,9 @@ pub fn is_compact(token: &str) -> bool {
 /// carried its own copy until 2026-09-22.
 #[must_use]
 pub fn carried<'a>(raw: &'a str, scheme: Option<&str>) -> Option<&'a str> {
-    let raw = raw.trim();
     let token = match scheme {
-        Some(scheme) => {
-            let (found, rest) = raw.split_once(char::is_whitespace)?;
-            if !found.eq_ignore_ascii_case(scheme) {
-                return None;
-            }
-            rest.trim()
-        }
-        None => raw,
+        Some(scheme) => crate::authorization::under(raw, scheme)?,
+        None => raw.trim(),
     };
     is_compact(token).then_some(token)
 }

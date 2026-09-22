@@ -249,6 +249,13 @@ impl Presented {
 
 xcore::declare_error!(IdentifyError);
 
+/// X.690 that is not what it says it is, in a token a technology reads.
+impl From<asn1::Asn1Error> for IdentifyError {
+    fn from(error: asn1::Asn1Error) -> Self {
+        Self::new(error.message)
+    }
+}
+
 /// Reads one mechanism's claim off the connection, before a Message exists.
 ///
 /// `xmip-core-identify-certificate`, `-header`, `-ip`, `-dns`, `-endpoint`,

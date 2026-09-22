@@ -58,6 +58,7 @@
 //! identification applies. The gate is not skipped; it is asked, and may have
 //! nothing to say.
 
+pub mod authorization;
 pub mod jwt;
 pub mod ntlm;
 pub mod peer;

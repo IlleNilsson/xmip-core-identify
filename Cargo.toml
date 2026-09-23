@@ -20,10 +20,10 @@ message = { package = "xmip-core-message", git = "https://github.com/IlleNilsson
 context = { package = "xmip-core-context", git = "https://github.com/IlleNilsson/xmip-core-context", branch = "main" }
 # X.690, for the conversion that lets a technology reading a Kerberos token
 # with it write `?`.
-asn1 = { package = "xmip-core-asn1", git = "https://github.com/IlleNilsson/xmip-core-asn1", branch = "main" }
+asn1 = { package = "xmip-core-library-asn1", git = "https://github.com/IlleNilsson/xmip-core-library-asn1", branch = "main" }
 # Encoding primitives, whose failures this crate's error takes with `From`.
-codec = { package = "xmip-core-codec", git = "https://github.com/IlleNilsson/xmip-core-codec", branch = "main" }
+codec = { package = "xmip-core-library-codec", git = "https://github.com/IlleNilsson/xmip-core-library-codec", branch = "main" }
 # Network primitives, whose failures this crate's error takes with `From`.
-net = { package = "xmip-core-net", git = "https://github.com/IlleNilsson/xmip-core-net", branch = "main" }
+net = { package = "xmip-core-library-net", git = "https://github.com/IlleNilsson/xmip-core-library-net", branch = "main" }
 # RFC 7515 base64url, for the compact token the jwt and oidc technologies read.
 base64 = "0.22"

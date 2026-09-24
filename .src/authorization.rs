@@ -8,19 +8,10 @@
 //! first gate claim a different username than the second verified. Every
 //! reader of the header on either side reads it here.
 
-use base64::Engine;
-use base64::engine::general_purpose::STANDARD;
-
 use crate::IdentifyError;
 
 /// The arrival property the transport puts the `Authorization` header on.
 pub const AUTHORIZATION: &str = "http.header.authorization";
-/// The proof a Basic credential travels under: the base64 after `Basic `.
-pub const BASIC_CREDENTIAL: &str = "basic.credential";
-/// The proof a bearer token travels under: the whole token.
-pub const BEARER_TOKEN: &str = "bearer.token";
-/// The proof a Digest response travels under: the whole parameter list.
-pub const DIGEST_RESPONSE: &str = "digest.response";
 /// How many characters of a bearer token its claim shows.
 pub const BEARER_SHORT_FORM: usize = 8;
 
@@ -50,8 +41,7 @@ pub fn under<'a>(value: &'a str, wanted: &str) -> Option<&'a str> {
 ///
 /// Not base64, not UTF-8, no colon between the two halves, or no user.
 pub fn basic(credential: &str) -> Result<(String, String), IdentifyError> {
-    let decoded = STANDARD
-        .decode(credential.trim())
+    let decoded = codec::base64::decode(credential.trim())
         .map_err(|_| IdentifyError::new("the Basic credential is not base64"))?;
     let text = String::from_utf8(decoded)
         .map_err(|_| IdentifyError::new("the Basic credential is not UTF-8"))?;

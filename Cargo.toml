@@ -25,5 +25,3 @@ asn1 = { package = "xmip-core-library-asn1", git = "https://github.com/IlleNilss
 codec = { package = "xmip-core-library-codec", git = "https://github.com/IlleNilsson/xmip-core-library-codec", branch = "main" }
 # Network primitives, whose failures this crate's error takes with `From`.
 net = { package = "xmip-core-library-net", git = "https://github.com/IlleNilsson/xmip-core-library-net", branch = "main" }
-# RFC 7515 base64url, for the compact token the jwt and oidc technologies read.
-base64 = "0.22"

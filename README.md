@@ -24,14 +24,20 @@ both call it:
   short form.
 - `evidence` — every name a claim carries across the gates, evidence and
   proof, declared once for the gate that writes it and the one that reads it.
+  A name a transport writes on the arrival — the peer's address, a header,
+  the TLS peer certificate, the SSH exchange — is `context::property`'s, not
+  this crate's (ADR-0019, amendment 2026-09-24).
 - `principal` — user and service principal names, read and compared one way
   (ADR-0054).
 - `jwt` — a compact token's parts and claims.
 - `kerberos` — the `Negotiate` token to its AP-REQ's ticket: SPNEGO, GSS-API
   or bare, the service, the realm, the sealed cipher.
-- `ntlm` — the AUTHENTICATE message and the client's half of its `NTLMv2`
-  response.
 - `saml` — an assertion's base64 and the principal it names.
 
-`kerberos` and `ntlm` carry a public `fixture` module that builds the bytes a
-client makes, for both gates' tests; it verifies nothing.
+`kerberos` carries a public `fixture` module that builds the bytes a client
+makes, for both gates' tests; it verifies nothing.
+
+The NTLM messages are not read here: their layout is
+`xmip-core-library-ntlm`'s, which `ntlm` at both gates and the SMB transport
+read and write through, and this crate's error takes its failures with
+`From` (ADR-0050, amendment 2026-09-24).

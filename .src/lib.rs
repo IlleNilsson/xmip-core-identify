@@ -63,7 +63,6 @@ pub mod authorization;
 pub mod evidence;
 pub mod jwt;
 pub mod kerberos;
-pub mod ntlm;
 pub mod principal;
 pub mod saml;
 
@@ -263,6 +262,13 @@ impl From<net::NetError> for IdentifyError {
 /// Text that is not the encoding it claims, in what a technology reads.
 impl From<codec::CodecError> for IdentifyError {
     fn from(error: codec::CodecError) -> Self {
+        Self::new(error.message)
+    }
+}
+
+/// An NTLM message that is not what it says it is, in what a technology reads.
+impl From<ntlm::NtlmError> for IdentifyError {
+    fn from(error: ntlm::NtlmError) -> Self {
         Self::new(error.message)
     }
 }

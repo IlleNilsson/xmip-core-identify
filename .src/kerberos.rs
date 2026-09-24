@@ -83,7 +83,7 @@ impl Ticket {
     /// nor Kerberos, carries a Kerberos message that is not an AP-REQ, or an
     /// AP-REQ whose ticket cannot be read.
     pub fn from_negotiate(token: &[u8]) -> Result<Option<Self>, IdentifyError> {
-        if token.starts_with(crate::ntlm::SIGNATURE) {
+        if token.starts_with(ntlm::SIGNATURE) {
             return Ok(None);
         }
 

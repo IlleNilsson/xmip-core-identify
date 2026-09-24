@@ -6,12 +6,11 @@
 //! decoded Basic, and the two gates read a Digest list two ways — the first
 //! at every comma, the second outside quotes — so a quoted comma made the
 //! first gate claim a different username than the second verified. Every
-//! reader of the header on either side reads it here.
+//! reader of the header on either side reads it here. The name the transport
+//! puts it on the arrival under is `context::property::HTTP_AUTHORIZATION`.
 
 use crate::IdentifyError;
 
-/// The arrival property the transport puts the `Authorization` header on.
-pub const AUTHORIZATION: &str = "http.header.authorization";
 /// How many characters of a bearer token its claim shows.
 pub const BEARER_SHORT_FORM: usize = 8;
 

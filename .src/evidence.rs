@@ -9,6 +9,12 @@
 //! equal by nothing. A technology that neither shares nor hands on a name
 //! keeps it: a name is here because more than one crate says it.
 //!
+//! Only names that cross the gates inside identity are here. A name a
+//! transport writes and a gate reads — the peer's address, the TLS peer
+//! certificate's issuer and fingerprint, the first two NTLM legs — is
+//! `context::property`'s, even where a gate hands it on under the same name
+//! (the owner, 2026-09-24).
+//!
 //! What each carries, and in what form, is said where it is written. A proof
 //! never reaches the record (`Presented::proof`); evidence always does.
 
@@ -29,10 +35,6 @@ pub const API_KEY_SOURCE: &str = "api-key.source";
 /// A Kerberos ticket's client as the ticket names it, `cname@crealm`: sealed
 /// to the first gate, which says so, and learned by the second.
 pub const KERBEROS_CLIENT: &str = "kerberos.client";
-/// The peer certificate's issuer, as the transport wrote it.
-pub const TLS_PEER_ISSUER: &str = "tls.peer.issuer";
-/// The peer certificate's fingerprint, as the transport wrote it.
-pub const TLS_PEER_FINGERPRINT: &str = "tls.peer.fingerprint";
 
 // Proofs: for the authenticator of the same mechanism, never on the record.
 
@@ -56,12 +58,6 @@ pub const SAML_ASSERTION: &str = "saml.assertion";
 pub const KERBEROS_AP_REQ: &str = "kerberos.ap-req";
 /// An NTLM AUTHENTICATE (type 3) message, base64.
 pub const NTLM_AUTHENTICATE: &str = "ntlm.authenticate";
-/// The NEGOTIATE (type 1) message of the same handshake, base64, where the
-/// transport kept it; the transport writes it as a property of this name.
-pub const NTLM_NEGOTIATE: &str = "ntlm.negotiate";
-/// The CHALLENGE (type 2) message the node answered with, base64, where the
-/// transport kept it; the transport writes it as a property of this name.
-pub const NTLM_CHALLENGE: &str = "ntlm.challenge";
 /// The peer's certificate chain, PEM, where no handshake proved it.
 pub const CERTIFICATE_CHAIN: &str = "certificate.chain";
 /// The transport's word that its handshake proved the peer's chain.
@@ -83,8 +79,6 @@ mod tests {
             SCOPE,
             API_KEY_SOURCE,
             KERBEROS_CLIENT,
-            TLS_PEER_ISSUER,
-            TLS_PEER_FINGERPRINT,
             BASIC_CREDENTIAL,
             BEARER_TOKEN,
             DIGEST_RESPONSE,
@@ -95,8 +89,6 @@ mod tests {
             SAML_ASSERTION,
             KERBEROS_AP_REQ,
             NTLM_AUTHENTICATE,
-            NTLM_NEGOTIATE,
-            NTLM_CHALLENGE,
             CERTIFICATE_CHAIN,
             MUTUAL_TLS_HANDSHAKE,
             SSH_KEY_SIGNATURE,
@@ -106,5 +98,11 @@ mod tests {
         sorted.sort_unstable();
         sorted.dedup();
         assert_eq!(sorted.len(), names.len());
+
+        // And none is a name a transport or the runtime writes: that one is
+        // declared in context, once, and not again here.
+        for name in names {
+            assert!(!context::property::ALL.contains(&name), "{name}");
+        }
     }
 }

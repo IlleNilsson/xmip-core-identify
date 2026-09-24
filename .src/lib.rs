@@ -58,8 +58,11 @@
 //! identification applies. The gate is not skipped; it is asked, and may have
 //! nothing to say.
 
+pub mod api_key;
 pub mod authorization;
+pub mod evidence;
 pub mod jwt;
+pub mod kerberos;
 pub mod ntlm;
 pub mod principal;
 pub mod saml;

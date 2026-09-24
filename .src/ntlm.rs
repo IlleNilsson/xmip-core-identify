@@ -1,5 +1,9 @@
-//! The client's half of an `NTLMv2` response: when it was made, and which
-//! service the client meant to reach.
+//! NTLM as both gates read it: the AUTHENTICATE message, and the client's
+//! half of its `NTLMv2` response — when it was made, and which service the
+//! client meant to reach.
+//!
+//! [`Authenticate`] is the type 3 message, read once: the first gate
+//! presents its user and the second verifies its response (ADR-0050).
 //!
 //! An NT response under `NTLMv2` is the 16-byte proof followed by an
 //! `NTLMv2_CLIENT_CHALLENGE` ([MS-NLMP] 2.2.2.7): a response type and its
@@ -164,51 +168,173 @@ fn utf16(value: &[u8]) -> Result<String, IdentifyError> {
         .map_err(|_| IdentifyError::new("the NTLMv2 response's target name is not UTF-16"))
 }
 
-/// A blob as a client makes one, for the tests of whoever reads it: made at
-/// `unix_seconds`, naming `target` where given, under these flags. Public
-/// because two technologies' tests need the same bytes and a fixture copied
-/// twice drifts; it builds bytes and verifies nothing.
-#[must_use]
-pub fn blob_for(unix_seconds: u64, target: Option<&str>, flags: u32) -> Vec<u8> {
-    blob_bound(unix_seconds, target, flags, None)
+/// The eight bytes every NTLMSSP message opens with. `Negotiate` carries
+/// NTLM as well as Kerberos, and this is how a reader tells.
+pub const SIGNATURE: &[u8] = b"NTLMSSP\0";
+const NEGOTIATE_UNICODE: u32 = 0x0000_0001;
+// The offsets of an AUTHENTICATE message's `Len, MaxLen, BufferOffset`
+// fields and its flags ([MS-NLMP] 2.2.1.3).
+const NT_RESPONSE_FIELDS: usize = 20;
+const DOMAIN_FIELDS: usize = 28;
+const USER_FIELDS: usize = 36;
+const WORKSTATION_FIELDS: usize = 44;
+const SESSION_KEY_FIELDS: usize = 52;
+const MESSAGE_FLAGS: usize = 60;
+const PROOF: usize = 16;
+/// An `NTLMv1` NT response is exactly this long.
+const NTLMV1: usize = 24;
+
+/// An AUTHENTICATE (type 3) message, read once for both gates.
+///
+/// [MS-NLMP] 2.2.1.3 lays it out as a fixed header of `Len, MaxLen,
+/// BufferOffset` fields pointing into a payload: the LM response at 12, the
+/// NT response at 20, the domain at 28, the user at 36, the workstation at
+/// 44, the encrypted session key at 52 and the negotiated flags at 60; a
+/// version and the MIC may follow, to 88. The first gate reads the names and
+/// the client's challenge; the second the proof, the blob it covers, the
+/// flags and the session key. Until 2026-09-24 each read the message itself.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Authenticate {
+    /// The `UserName` field, as the client spelled it.
+    pub user: String,
+    /// The `DomainName` field, as the client spelled it; it enters the hash
+    /// exactly so.
+    pub domain: String,
+    /// The `Workstation` field.
+    pub workstation: String,
+    /// The flags the two ends negotiated, as the client states them.
+    pub flags: u32,
+    /// The whole `NtChallengeResponse`.
+    pub nt_response: Vec<u8>,
+    /// The `EncryptedRandomSessionKey`, empty where no key was exchanged.
+    pub session_key: Vec<u8>,
 }
 
-/// The same, bound to a channel where one is given.
-#[must_use]
-pub fn blob_bound(
-    unix_seconds: u64,
-    target: Option<&str>,
-    flags: u32,
-    channel: Option<[u8; 16]>,
-) -> Vec<u8> {
-    let ticks = (unix_seconds + EPOCH_GAP) * TICKS_PER_SECOND;
-    let mut blob = vec![1, 1, 0, 0, 0, 0, 0, 0];
-    blob.extend_from_slice(&ticks.to_le_bytes());
-    blob.extend_from_slice(&[0x22; 8]);
-    blob.extend_from_slice(&[0; 4]);
+impl Authenticate {
+    /// Read an NTLMSSP message. `None` for a NEGOTIATE (type 1), which
+    /// claims nothing yet.
+    ///
+    /// # Errors
+    ///
+    /// Where the bytes are not an NTLMSSP message, are a CHALLENGE, are
+    /// truncated, point outside themselves, or name no user.
+    pub fn parse(bytes: &[u8]) -> Result<Option<Self>, IdentifyError> {
+        if !bytes.starts_with(SIGNATURE) || bytes.len() < 12 {
+            return Err(IdentifyError::new(
+                "the NTLM message has no NTLMSSP signature",
+            ));
+        }
+        match u32_at(bytes, 8) {
+            Some(1) => return Ok(None),
+            Some(2) => {
+                return Err(IdentifyError::new(
+                    "the NTLM message is a CHALLENGE: the server's, not a credential",
+                ));
+            }
+            Some(3) => {}
+            _ => return Err(IdentifyError::new("the NTLM message type is not 1, 2 or 3")),
+        }
+        let flags = u32_at(bytes, MESSAGE_FLAGS).ok_or_else(|| {
+            IdentifyError::new("the NTLM AUTHENTICATE message is truncated before its flags")
+        })?;
+        let unicode = flags & NEGOTIATE_UNICODE != 0;
+        let text = |at: usize, name: &str| text(field(bytes, at, name)?, unicode, name);
 
-    let mut push = |id: u16, value: &[u8]| {
-        let length = u16::try_from(value.len()).unwrap_or(u16::MAX);
-        blob.extend_from_slice(&id.to_le_bytes());
-        blob.extend_from_slice(&length.to_le_bytes());
-        blob.extend_from_slice(value);
+        let user = text(USER_FIELDS, "UserName")?;
+        if user.is_empty() {
+            return Err(IdentifyError::new(
+                "the NTLM AUTHENTICATE message names no user",
+            ));
+        }
+        Ok(Some(Self {
+            user,
+            domain: text(DOMAIN_FIELDS, "DomainName")?,
+            workstation: text(WORKSTATION_FIELDS, "Workstation")?,
+            flags,
+            nt_response: field(bytes, NT_RESPONSE_FIELDS, "NtChallengeResponse")?.to_vec(),
+            session_key: field(bytes, SESSION_KEY_FIELDS, "EncryptedRandomSessionKey")?.to_vec(),
+        }))
+    }
+
+    /// The NT response as `NTLMv2` lays it out (2.2.2.8): the sixteen bytes
+    /// of `NTProofStr`, and the client's blob they cover.
+    ///
+    /// # Errors
+    ///
+    /// Where the response is `NTLMv1`, is too short to be `NTLMv2`, or its
+    /// blob is not an `NTLMv2` client challenge.
+    pub fn ntlmv2(&self) -> Result<(&[u8; PROOF], &[u8]), IdentifyError> {
+        if self.nt_response.len() == NTLMV1 {
+            return Err(IdentifyError::new(
+                "the NT response is NTLMv1 and this node verifies NTLMv2 only",
+            ));
+        }
+        let Some((proof, blob)) = self.nt_response.split_first_chunk::<PROOF>() else {
+            return Err(IdentifyError::new(
+                "the NTLM AUTHENTICATE message carries no NTLMv2 response",
+            ));
+        };
+        if !blob.starts_with(&[1, 1]) || blob.len() < FIXED {
+            return Err(IdentifyError::new(
+                "the NT response's blob is not an NTLMv2 client challenge",
+            ));
+        }
+        Ok((proof, blob))
+    }
+
+    /// The client's half of the NT response, where it is an `NTLMv2` one.
+    ///
+    /// # Errors
+    ///
+    /// As [`ClientChallenge::read`].
+    pub fn client_challenge(&self) -> Result<Option<ClientChallenge>, IdentifyError> {
+        match self.nt_response.get(PROOF..) {
+            Some(blob) if !blob.is_empty() => ClientChallenge::read(blob),
+            _ => Ok(None),
+        }
+    }
+}
+
+fn u16_at(bytes: &[u8], at: usize) -> Option<u16> {
+    bytes
+        .get(at..at + 2)
+        .map(|two| u16::from_le_bytes([two[0], two[1]]))
+}
+
+fn u32_at(bytes: &[u8], at: usize) -> Option<u32> {
+    bytes
+        .get(at..at + 4)
+        .map(|quad| u32::from_le_bytes([quad[0], quad[1], quad[2], quad[3]]))
+}
+
+/// One `Len, MaxLen, BufferOffset` field, and the bytes it points at.
+fn field<'a>(bytes: &'a [u8], at: usize, name: &str) -> Result<&'a [u8], IdentifyError> {
+    let (Some(length), Some(offset)) = (u16_at(bytes, at), u32_at(bytes, at + 4)) else {
+        return Err(IdentifyError::new(format!(
+            "the NTLM AUTHENTICATE message is truncated before its {name} field"
+        )));
     };
-    let utf16 =
-        |text: &str| -> Vec<u8> { text.encode_utf16().flat_map(u16::to_le_bytes).collect() };
-
-    push(0x0002, &utf16("PARTNERX"));
-    push(FLAGS, &flags.to_le_bytes());
-
-    if let Some(target) = target {
-        push(TARGET_NAME, &utf16(target));
-    }
-    if let Some(channel) = channel {
-        push(CHANNEL_BINDINGS, &channel);
-    }
-
-    push(END_OF_LIST, &[]);
-    blob
+    let offset = usize::try_from(offset).unwrap_or(usize::MAX);
+    bytes
+        .get(offset..offset.saturating_add(usize::from(length)))
+        .ok_or_else(|| {
+            IdentifyError::new(format!(
+                "the NTLM AUTHENTICATE message's {name} points outside the message"
+            ))
+        })
 }
+
+/// A name field's text: UTF-16 where Unicode was negotiated, else one
+/// character a byte.
+fn text(payload: &[u8], unicode: bool, name: &str) -> Result<String, IdentifyError> {
+    if unicode {
+        utf16(payload).map_err(|_| IdentifyError::new(format!("the NTLM {name} is not UTF-16")))
+    } else {
+        Ok(payload.iter().map(|byte| char::from(*byte)).collect())
+    }
+}
+
+pub mod fixture;
 
 #[cfg(test)]
 mod tests {
@@ -218,7 +344,7 @@ mod tests {
 
     #[test]
     fn the_target_and_the_time_are_read_from_the_client_challenge() {
-        let blob = blob_for(THEN, Some("HTTP/Xmip.Example"), 0x2);
+        let blob = fixture::blob(THEN, Some("HTTP/Xmip.Example"), 0x2);
 
         let read = ClientChallenge::read(&blob).expect("read").expect("NTLMv2");
         assert_eq!(read.target.as_deref(), Some("HTTP/Xmip.Example"));
@@ -229,7 +355,7 @@ mod tests {
 
     #[test]
     fn a_name_from_an_untrusted_source_is_read_and_is_no_supplied_target() {
-        let blob = blob_for(THEN, Some("HTTP/xmip.example"), 0x2 | 0x4);
+        let blob = fixture::blob(THEN, Some("HTTP/xmip.example"), 0x2 | 0x4);
 
         let read = ClientChallenge::read(&blob).expect("read").expect("NTLMv2");
         assert!(read.untrusted);
@@ -239,14 +365,14 @@ mod tests {
 
     #[test]
     fn the_mic_flag_and_the_channel_are_read_and_a_zero_channel_is_none() {
-        let bound = blob_bound(THEN, None, 0x2, Some([0xC4; 16]));
+        let bound = fixture::blob_bound(THEN, None, 0x2, Some([0xC4; 16]));
         let read = ClientChallenge::read(&bound)
             .expect("read")
             .expect("NTLMv2");
         assert!(read.integrity);
         assert_eq!(read.channel, Some([0xC4; 16]));
 
-        let unbound = blob_bound(THEN, None, 0, Some([0; 16]));
+        let unbound = fixture::blob_bound(THEN, None, 0, Some([0; 16]));
         let read = ClientChallenge::read(&unbound)
             .expect("read")
             .expect("NTLMv2");
@@ -259,16 +385,76 @@ mod tests {
         assert!(ClientChallenge::read(&[0x5A; 8]).expect("read").is_none());
         assert!(ClientChallenge::read(&[2u8; 40]).expect("read").is_none());
 
-        let nameless = blob_for(THEN, None, 0);
+        let nameless = fixture::blob(THEN, None, 0);
         let read = ClientChallenge::read(&nameless)
             .expect("read")
             .expect("NTLMv2");
         assert_eq!(read.target, None);
     }
 
+    fn authenticate(response: &[u8]) -> Vec<u8> {
+        fixture::authenticate("alice", "CORP", "WS01", response, 0, &[])
+    }
+
+    #[test]
+    fn a_type_3_is_read_into_its_names_its_proof_and_its_blob() {
+        let blob = fixture::blob(THEN, Some("HTTP/xmip.example"), 0);
+        let mut response = vec![7u8; 16];
+        response.extend_from_slice(&blob);
+
+        let read = Authenticate::parse(&authenticate(&response))
+            .expect("read")
+            .expect("a type 3");
+        let (proof, covered) = read.ntlmv2().expect("NTLMv2");
+
+        assert_eq!(
+            (
+                read.user.as_str(),
+                read.domain.as_str(),
+                read.workstation.as_str()
+            ),
+            ("alice", "CORP", "WS01")
+        );
+        assert_eq!((proof, covered), (&[7u8; 16], blob.as_slice()));
+        assert_eq!(read.flags, NEGOTIATE_UNICODE);
+        assert!(read.session_key.is_empty());
+        let challenge = read.client_challenge().expect("read").expect("NTLMv2");
+        assert_eq!(challenge.target.as_deref(), Some("HTTP/xmip.example"));
+    }
+
+    #[test]
+    fn a_type_1_claims_nothing_and_a_type_2_or_a_stranger_is_refused_by_name() {
+        let mut negotiate = SIGNATURE.to_vec();
+        negotiate.extend_from_slice(&1u32.to_le_bytes());
+        let mut challenge = SIGNATURE.to_vec();
+        challenge.extend_from_slice(&2u32.to_le_bytes());
+
+        assert_eq!(Authenticate::parse(&negotiate).expect("read"), None);
+        let refused = |bytes: &[u8]| Authenticate::parse(bytes).expect_err("refused").message;
+        assert!(refused(&challenge).contains("CHALLENGE"));
+        assert!(refused(b"not an NTLM message").contains("NTLMSSP signature"));
+        assert!(refused(&authenticate(&[])[..70]).contains("points outside"));
+        let nameless = fixture::authenticate("", "CORP", "", &[], 0, &[]);
+        assert!(refused(&nameless).contains("names no user"));
+    }
+
+    #[test]
+    fn an_ntlmv1_or_absent_response_is_no_ntlmv2_and_says_which() {
+        let refused = |response: &[u8]| {
+            let read = Authenticate::parse(&authenticate(response))
+                .expect("read")
+                .expect("a type 3");
+            assert_eq!(read.client_challenge().expect("read"), None);
+            read.ntlmv2().expect_err("refused").message
+        };
+
+        assert!(refused(&[0; 24]).contains("NTLMv1"));
+        assert!(refused(&[0; 8]).contains("carries no NTLMv2 response"));
+    }
+
     #[test]
     fn a_pair_that_runs_past_the_blob_is_an_error_naming_it() {
-        let mut broken = blob_for(THEN, None, 0);
+        let mut broken = fixture::blob(THEN, None, 0);
         broken.truncate(FIXED);
         broken.extend_from_slice(&[0x09, 0x00, 0xFF, 0x00, b'H', 0]);
 

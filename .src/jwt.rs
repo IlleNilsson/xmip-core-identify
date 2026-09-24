@@ -12,8 +12,6 @@
 //! claims need more than that is not a token this gate reads.
 
 use crate::IdentifyError;
-use base64::Engine;
-use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 
 /// A token split at its two dots, each part decoded.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -141,8 +139,7 @@ pub fn carried<'a>(raw: &'a str, scheme: Option<&str>) -> Option<&'a str> {
 ///
 /// Where the text is not base64url.
 pub fn decode(text: &str, what: &str) -> Result<Vec<u8>, IdentifyError> {
-    URL_SAFE_NO_PAD
-        .decode(text.trim_end_matches('='))
+    codec::base64::decode_url(text.trim_end_matches('='))
         .map_err(|_| IdentifyError::new(format!("the JWT {what} is not base64url")))
 }
 
@@ -276,9 +273,9 @@ mod tests {
     fn token(header: &str, claims: &str) -> String {
         format!(
             "{}.{}.{}",
-            URL_SAFE_NO_PAD.encode(header),
-            URL_SAFE_NO_PAD.encode(claims),
-            URL_SAFE_NO_PAD.encode(b"sig")
+            codec::base64::encode_url_unpadded(header.as_bytes()),
+            codec::base64::encode_url_unpadded(claims.as_bytes()),
+            codec::base64::encode_url_unpadded(b"sig")
         )
     }
 

@@ -9,15 +9,7 @@
 //! one assertion could name one principal to the first gate and another to
 //! the second. The rule is here, and each gate hands it what it read.
 
-use base64::Engine;
-use base64::alphabet;
-use base64::engine::{DecodePaddingMode, GeneralPurpose, GeneralPurposeConfig};
-
 use crate::{IdentifyError, UserPrincipalName};
-
-/// The proof the base64 assertion rides under, from the first gate to the
-/// second.
-pub const ASSERTION_PROOF: &str = "saml.assertion";
 
 /// The `Name` of the attribute an identity provider carries a user principal
 /// name under.
@@ -31,13 +23,6 @@ pub const NAMING_FORMATS: [&str; 3] = [
     "urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified",
 ];
 
-/// Standard base64, padded or not: identity providers differ, and the
-/// binding does not say.
-const BASE64: GeneralPurpose = GeneralPurpose::new(
-    &alphabet::STANDARD,
-    GeneralPurposeConfig::new().with_decode_padding_mode(DecodePaddingMode::Indifferent),
-);
-
 /// The bytes a base64 response or assertion carries, whitespace between
 /// its lines ignored.
 ///
@@ -46,8 +31,7 @@ const BASE64: GeneralPurpose = GeneralPurpose::new(
 /// Where the text is not base64.
 pub fn decode(text: &str) -> Result<Vec<u8>, IdentifyError> {
     let compact: String = text.split_whitespace().collect();
-    BASE64
-        .decode(compact)
+    codec::base64::decode(&compact)
         .map_err(|_| IdentifyError::new("the SAML message is not base64"))
 }
 

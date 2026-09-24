@@ -11,8 +11,9 @@
 //!
 //! So the two names are types here, in the capability every identify and
 //! authenticate technology already depends on (ADR-0044), and a technology
-//! that can read one says so under one of two evidence names, [`USER`] and
-//! [`SERVICE`], in the one canonical form these types write. A Party is then
+//! that can read one says so under one of two evidence names,
+//! [`evidence::PRINCIPAL_USER`] and [`evidence::PRINCIPAL_SERVICE`], in the
+//! one canonical form these types write. A Party is then
 //! resolved by a principal name whatever mechanism carried it.
 //!
 //! Canonical means comparable, not pretty: a domain and a realm fold to lower
@@ -22,11 +23,7 @@
 
 use std::fmt;
 
-/// The evidence name a user principal name is put under, in canonical form.
-pub const USER: &str = "principal.user";
-
-/// The evidence name a service principal name is put under, in canonical form.
-pub const SERVICE: &str = "principal.service";
+use crate::evidence;
 
 /// A user principal name: a user within a domain.
 #[derive(Clone, Debug, Eq, Hash, PartialEq)]
@@ -236,8 +233,8 @@ impl PrincipalName {
     #[must_use]
     pub const fn evidence(&self) -> &'static str {
         match self {
-            Self::User(_) => USER,
-            Self::Service(_) => SERVICE,
+            Self::User(_) => evidence::PRINCIPAL_USER,
+            Self::Service(_) => evidence::PRINCIPAL_SERVICE,
         }
     }
 }
@@ -314,8 +311,8 @@ mod tests {
         let user = PrincipalName::parse("jane@partner-x.example").expect("a user");
         let service = PrincipalName::parse("HTTP/xmip.example@EXAMPLE.COM").expect("a service");
 
-        assert_eq!(user.evidence(), USER);
-        assert_eq!(service.evidence(), SERVICE);
+        assert_eq!(user.evidence(), evidence::PRINCIPAL_USER);
+        assert_eq!(service.evidence(), evidence::PRINCIPAL_SERVICE);
         assert_eq!(service.to_string(), "HTTP/xmip.example@example.com");
         assert!(PrincipalName::parse("CN=partner-x.example").is_none());
     }

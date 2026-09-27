@@ -27,3 +27,6 @@ codec = { package = "xmip-core-library-codec", git = "https://github.com/IlleNil
 ntlm = { package = "xmip-core-library-ntlm", git = "https://github.com/IlleNilsson/xmip-core-library-ntlm", branch = "main" }
 # Network primitives, whose failures this crate's error takes with `From`.
 net = { package = "xmip-core-library-net", git = "https://github.com/IlleNilsson/xmip-core-library-net", branch = "main" }
+
+[profile.dev.package."*"]
+opt-level = 3

@@ -29,7 +29,8 @@ both call it:
   this crate's (ADR-0019, amendment 2026-09-24).
 - `principal` — user and service principal names, read and compared one way
   (ADR-0054).
-- `jwt` — a compact token's parts and claims.
+- `jwt` — a compact token's parts and claims, its header and claims set read with
+  `serde_json`; a member name that appears twice, escaped or not, refuses the token.
 - `kerberos` — the `Negotiate` token to its AP-REQ's ticket: SPNEGO, GSS-API
   or bare, the service, the realm, the sealed cipher.
 - `saml` — an assertion's base64 and the principal it names.

@@ -233,6 +233,15 @@ impl Presented {
         self
     }
 
+    /// The first value observed under this name, if any.
+    #[must_use]
+    pub fn evidence(&self, name: &str) -> Option<&str> {
+        self.evidence
+            .iter()
+            .find(|(candidate, _)| candidate == name)
+            .map(|(_, value)| value.as_str())
+    }
+
     /// What was attached under this name, for the authenticator that owns it.
     #[must_use]
     pub fn proof(&self, name: &str) -> Option<&str> {

@@ -25,6 +25,10 @@ asn1 = { package = "xmip-core-library-asn1", git = "https://github.com/IlleNilss
 codec = { package = "xmip-core-library-codec", git = "https://github.com/IlleNilsson/xmip-core-library-codec", branch = "main" }
 # The NTLM message layout, whose failures this crate's error takes with `From`.
 ntlm = { package = "xmip-core-library-ntlm", git = "https://github.com/IlleNilsson/xmip-core-library-ntlm", branch = "main" }
+# A JWT's header and claims set, read as authenticate's JOSE keys are
+# (jwt.rs); serde for the reader that refuses a member named twice.
+serde = "1"
+serde_json = "1"
 # Network primitives, whose failures this crate's error takes with `From`.
 net = { package = "xmip-core-library-net", git = "https://github.com/IlleNilsson/xmip-core-library-net", branch = "main" }
 

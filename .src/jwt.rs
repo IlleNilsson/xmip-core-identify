@@ -7,19 +7,23 @@
 //! and neither technology depends on the other. The signature bytes are kept
 //! for the authenticator; nothing here decides whether they hold.
 //!
-//! The claim reader is deliberately small: it finds one top-level member by
-//! name and reads a string, a number or an array of strings. A token whose
-//! claims need more than that is not a token this gate reads.
+//! The header and the claims set are read with `serde_json`, as every
+//! other JSON reader in the estate is, and a member name that appears twice
+//! refuses the token: a reader that took the first and an authenticator
+//! that took the last would each trust a different claim.
+
+use serde::de::{self, Deserialize, Deserializer, MapAccess, Visitor};
+use serde_json::{Map, Value};
 
 use crate::IdentifyError;
 
 /// A token split at its two dots, each part decoded.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Compact {
-    /// The protected header, as JSON text.
-    pub header: String,
-    /// The claims set, as JSON text.
-    pub claims: String,
+    /// The protected header's members.
+    pub header: Map<String, Value>,
+    /// The claims set's members.
+    pub claims: Map<String, Value>,
     /// The signature, as bytes. Verified by the second gate or not at all.
     pub signature: Vec<u8>,
     /// What was signed: `<header>.<claims>` exactly as it arrived.
@@ -32,7 +36,8 @@ impl Compact {
     /// # Errors
     ///
     /// Where the text is not three base64url parts around two dots, or a part
-    /// does not decode, or the header and claims are not UTF-8.
+    /// does not decode, or the header or claims set is not a JSON object
+    /// with unique member names.
     pub fn parse(token: &str) -> Result<Self, IdentifyError> {
         let mut parts = token.trim().split('.');
         let (Some(header), Some(claims), Some(signature), None) =
@@ -44,8 +49,8 @@ impl Compact {
         };
 
         Ok(Self {
-            header: decode_text(header, "header")?,
-            claims: decode_text(claims, "claims")?,
+            header: decode_object(header, "header")?,
+            claims: decode_object(claims, "claims")?,
             signature: decode(signature, "signature")?,
             signing_input: format!("{header}.{claims}"),
         })
@@ -54,25 +59,30 @@ impl Compact {
     /// The `alg` the header names.
     #[must_use]
     pub fn algorithm(&self) -> Option<String> {
-        string_claim(&self.header, "alg")
+        text(&self.header, "alg")
     }
 
     /// The `kid` the header names, where it names one.
     #[must_use]
     pub fn key_id(&self) -> Option<String> {
-        string_claim(&self.header, "kid")
+        text(&self.header, "kid")
     }
 
     /// One string claim from the claims set.
     #[must_use]
     pub fn claim(&self, name: &str) -> Option<String> {
-        string_claim(&self.claims, name)
+        text(&self.claims, name)
     }
 
-    /// One numeric claim — `exp`, `nbf`, `iat` — as seconds.
+    /// One numeric claim — `exp`, `nbf`, `iat` — as whole seconds; a
+    /// fraction is dropped.
     #[must_use]
+    #[allow(clippy::cast_possible_truncation)]
     pub fn numeric_claim(&self, name: &str) -> Option<i64> {
-        number_claim(&self.claims, name)
+        let value = self.claims.get(name)?;
+        value
+            .as_i64()
+            .or_else(|| value.as_f64().map(|seconds| seconds as i64))
     }
 
     /// The principal name the token carries, where it carries one
@@ -104,12 +114,26 @@ impl Compact {
             .map(crate::PrincipalName::Service)
     }
 
-    /// A claim that is a string or an array of strings — `aud`, `scope`
-    /// split on spaces, `roles`.
+    /// A claim that is a string or an array of strings — `aud`, `scope`,
+    /// `roles` — as its strings; nothing where it is absent, or is neither,
+    /// or an array holds anything but strings.
     #[must_use]
     pub fn strings_claim(&self, name: &str) -> Vec<String> {
-        strings_claim(&self.claims, name)
+        match self.claims.get(name) {
+            Some(Value::String(one)) => vec![one.clone()],
+            Some(Value::Array(values)) => values
+                .iter()
+                .map(|value| value.as_str().map(str::to_string))
+                .collect::<Option<Vec<_>>>()
+                .unwrap_or_default(),
+            _ => Vec::new(),
+        }
     }
+}
+
+/// A member's value where it is a string.
+fn text(members: &Map<String, Value>, name: &str) -> Option<String> {
+    members.get(name)?.as_str().map(str::to_string)
 }
 
 /// Three parts around two dots and no whitespace: the shape RFC 7515 gives a
@@ -143,118 +167,49 @@ pub fn decode(text: &str, what: &str) -> Result<Vec<u8>, IdentifyError> {
         .map_err(|_| IdentifyError::new(format!("the JWT {what} is not base64url")))
 }
 
-fn decode_text(text: &str, what: &str) -> Result<String, IdentifyError> {
-    String::from_utf8(decode(text, what)?)
-        .map_err(|_| IdentifyError::new(format!("the JWT {what} is not UTF-8 JSON")))
+/// The object a header or claims set is, read by `serde_json` and refused
+/// where a member name appears twice — once its escapes are undone, so
+/// `"sub"` is `sub` — because RFC 7519 section 4 lets a reader take
+/// either and an authenticator must not trust the one a reader did not.
+struct Members(Map<String, Value>);
+
+impl<'de> Deserialize<'de> for Members {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_map(MembersVisitor)
+    }
 }
 
-/// Find a top-level member's value in a JSON object, as the raw slice after
-/// the colon. Nested objects and arrays are skipped whole so a member inside
-/// one is never mistaken for a top-level one.
-fn member<'a>(json: &'a str, name: &str) -> Option<&'a str> {
-    let key = format!("\"{name}\"");
-    let mut depth = 0usize;
-    let mut in_string = false;
-    let mut escaped = false;
-    let bytes = json.as_bytes();
-    let mut index = 0;
+struct MembersVisitor;
 
-    while index < bytes.len() {
-        let byte = bytes[index];
-        if in_string {
-            match byte {
-                b'\\' if !escaped => escaped = true,
-                b'"' if !escaped => in_string = false,
-                _ => escaped = false,
+impl<'de> Visitor<'de> for MembersVisitor {
+    type Value = Members;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("a JSON object whose member names are unique")
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut access: A) -> Result<Members, A::Error> {
+        let mut members = Map::new();
+        while let Some(name) = access.next_key::<String>()? {
+            if members.contains_key(&name) {
+                return Err(de::Error::custom(format!(
+                    "the member {name:?} appears twice"
+                )));
             }
-        } else {
-            match byte {
-                b'{' | b'[' => depth += 1,
-                b'}' | b']' => depth = depth.saturating_sub(1),
-                b'"' if depth == 1 && json[index..].starts_with(&key) => {
-                    let after = json[index + key.len()..].trim_start();
-                    if let Some(rest) = after.strip_prefix(':') {
-                        return Some(rest.trim_start());
-                    }
-                    in_string = true;
-                }
-                b'"' => in_string = true,
-                _ => {}
-            }
+            let value = access.next_value::<Value>()?;
+            members.insert(name, value);
         }
-        index += 1;
-    }
-
-    None
-}
-
-fn read_string(raw: &str) -> Option<(String, &str)> {
-    let mut rest = raw.strip_prefix('"')?;
-    let mut value = String::new();
-
-    loop {
-        let mut chars = rest.chars();
-        match chars.next()? {
-            '"' => return Some((value, chars.as_str())),
-            '\\' => {
-                let escaped = chars.next()?;
-                let unescaped = match escaped {
-                    'n' => '\n',
-                    't' => '\t',
-                    'r' => '\r',
-                    'u' => {
-                        let hex = chars.as_str().get(..4)?;
-                        let code = u32::from_str_radix(hex, 16).ok()?;
-                        rest = chars.as_str().get(4..)?;
-                        value.push(char::from_u32(code)?);
-                        continue;
-                    }
-                    other => other,
-                };
-                value.push(unescaped);
-            }
-            other => value.push(other),
-        }
-        rest = chars.as_str();
+        Ok(Members(members))
     }
 }
 
-fn string_claim(json: &str, name: &str) -> Option<String> {
-    read_string(member(json, name)?).map(|(value, _)| value)
-}
-
-fn number_claim(json: &str, name: &str) -> Option<i64> {
-    let raw = member(json, name)?;
-    let end = raw
-        .find(|c: char| !(c.is_ascii_digit() || c == '-' || c == '.'))
-        .unwrap_or(raw.len());
-    let text = &raw[..end];
-    text.parse::<i64>()
-        .ok()
-        .or_else(|| text.parse::<f64>().ok().map(|f| f as i64))
-}
-
-fn strings_claim(json: &str, name: &str) -> Vec<String> {
-    let Some(raw) = member(json, name) else {
-        return Vec::new();
-    };
-    if let Some((one, _)) = read_string(raw) {
-        return vec![one];
-    }
-    let Some(mut rest) = raw.strip_prefix('[') else {
-        return Vec::new();
-    };
-    let mut values = Vec::new();
-    loop {
-        rest = rest.trim_start();
-        match read_string(rest) {
-            Some((value, after)) => {
-                values.push(value);
-                rest = after.trim_start().strip_prefix(',').unwrap_or(after);
-            }
-            None => return values,
-        }
-    }
+fn decode_object(text: &str, what: &str) -> Result<Map<String, Value>, IdentifyError> {
+    let bytes = decode(text, what)?;
+    serde_json::from_slice::<Members>(&bytes)
+        .map(|members| members.0)
+        .map_err(|failure| {
+            IdentifyError::new(format!("the JWT {what} is not a JSON object: {failure}"))
+        })
 }
 
 #[cfg(test)]
@@ -300,7 +255,8 @@ mod tests {
 
     #[test]
     fn a_part_that_is_not_base64url_is_refused_by_name() {
-        let failure = Compact::parse("aQ.b!!.aQ").expect_err("not base64url");
+        let header = codec::base64::encode_url_unpadded(br#"{"alg":"none"}"#);
+        let failure = Compact::parse(&format!("{header}.b!!.aQ")).expect_err("not base64url");
 
         assert!(failure.message.contains("claims"));
     }
@@ -325,5 +281,56 @@ mod tests {
         let compact = Compact::parse(&text).expect("three parts");
 
         assert_eq!(compact.claim("sub").as_deref(), Some("a\"bA"));
+    }
+
+    #[test]
+    fn every_json_escape_is_undone_and_a_surrogate_pair_is_one_character() {
+        let text = token(r#"{"alg":"none"}"#, r#"{"sub":"\b\f\n\r\t\/\\é😀"}"#);
+        let compact = Compact::parse(&text).expect("three parts");
+
+        assert_eq!(
+            compact.claim("sub").as_deref(),
+            Some("\u{8}\u{c}\n\r\t/\\\u{e9}\u{1f600}")
+        );
+        let lone = token(r#"{"alg":"none"}"#, r#"{"sub":"\ud83d"}"#);
+        assert!(Compact::parse(&lone).is_err(), "a lone surrogate");
+    }
+
+    #[test]
+    fn a_member_name_is_matched_after_its_escapes_are_undone() {
+        let text = token(r#"{"alg":"none"}"#, r#"{"sub":"partner-x"}"#);
+        let compact = Compact::parse(&text).expect("three parts");
+
+        assert_eq!(compact.algorithm().as_deref(), Some("none"));
+        assert_eq!(compact.claim("sub").as_deref(), Some("partner-x"));
+    }
+
+    #[test]
+    fn a_member_named_twice_refuses_the_token_even_behind_an_escape() {
+        for claims in [
+            r#"{"sub":"partner-x","sub":"admin"}"#,
+            r#"{"sub":"partner-x","sub":"admin"}"#,
+        ] {
+            let failure = Compact::parse(&token(r#"{"alg":"none"}"#, claims)).expect_err(claims);
+            assert!(failure.message.contains("twice"), "{}", failure.message);
+        }
+        let header = token(r#"{"alg":"none","alg":"HS256"}"#, r#"{"sub":"x"}"#);
+        let failure = Compact::parse(&header).expect_err("a header named twice");
+        assert!(failure.message.contains("header"), "{}", failure.message);
+    }
+
+    #[test]
+    fn claims_that_are_not_an_object_or_a_mixed_array_are_not_read() {
+        assert!(Compact::parse(&token(r#"{"alg":"none"}"#, "[1]")).is_err());
+        assert!(Compact::parse(&token(r#"{"alg":"none"}"#, "{\"sub\":")).is_err());
+        let text = token(
+            r#"{"alg":"none"}"#,
+            r#"{"aud":["a",1],"exp":1700000000.9,"sub":7}"#,
+        );
+        let compact = Compact::parse(&text).expect("three parts");
+
+        assert!(compact.strings_claim("aud").is_empty());
+        assert_eq!(compact.numeric_claim("exp"), Some(1_700_000_000));
+        assert_eq!(compact.claim("sub"), None, "a number is not a string");
     }
 }

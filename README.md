@@ -24,6 +24,8 @@ both call it:
   short form.
 - `evidence` — every name a claim carries across the gates, evidence and
   proof, declared once for the gate that writes it and the one that reads it.
+  A `Presented` claim answers `evidence(name)` and `proof(name)` for them,
+  the one lookup every verifier uses.
   A name a transport writes on the arrival — the peer's address, a header,
   the TLS peer certificate, the SSH exchange — is `context::property`'s, not
   this crate's (ADR-0019, amendment 2026-09-24).

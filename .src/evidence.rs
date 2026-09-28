@@ -64,7 +64,8 @@ pub const CERTIFICATE_CHAIN: &str = "certificate.chain";
 pub const MUTUAL_TLS_HANDSHAKE: &str = "mutual-tls.handshake";
 /// The signature an SSH peer made with its key.
 pub const SSH_KEY_SIGNATURE: &str = "ssh-key.signature";
-/// The session identifier that signature covers.
+/// What that signature covers: RFC 4252's signed data, which opens with
+/// the session identifier and names the user and the key.
 pub const SSH_KEY_SESSION: &str = "ssh-key.session";
 
 #[cfg(test)]

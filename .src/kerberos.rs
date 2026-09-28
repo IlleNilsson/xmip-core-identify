@@ -25,10 +25,16 @@
 //! Until 2026-09-24 each unwrapped `Negotiate` and read the AP-REQ itself.
 //! The X.690 is the estate's one reader, `xmip-core-library-asn1`; what is
 //! here is Kerberos's vocabulary: every field of a Kerberos `SEQUENCE` is
-//! explicitly tagged and constructed, and a `PrincipalName` is its
-//! components joined by `/`.
+//! explicitly tagged and constructed, a `PrincipalName` is its components
+//! joined by `/`, a `KerberosString` is UTF-8 and a `KerberosTime` whole
+//! seconds in UTC ([`string`], [`time`]; the X.690 reader carried those two
+//! until 2026-09-28).
 
-use asn1::{Element, OBJECT_IDENTIFIER, OCTET_STRING, SEQUENCE, application, context};
+use asn1::{
+    Element, GENERAL_STRING, GENERALIZED_TIME, OBJECT_IDENTIFIER, OCTET_STRING, SEQUENCE,
+    application, context,
+};
+use codec::civil::CivilTime;
 
 use crate::IdentifyError;
 
@@ -164,8 +170,7 @@ impl Ticket {
             return Err(IdentifyError::new("the AP-REQ's ticket is not a Ticket"));
         }
         let ticket = Element::expect(ticket.content, SEQUENCE, "a Ticket")?;
-        let realm = required(&ticket, 1, "realm in its ticket")?
-            .text()
+        let realm = string(&required(&ticket, 1, "realm in its ticket")?)
             .filter(|realm| !realm.is_empty())
             .ok_or_else(|| IdentifyError::new("the ticket's realm is not readable"))?;
         let service = principal(required(&ticket, 2, "service name in its ticket")?)?;
@@ -213,10 +218,43 @@ pub fn principal(name: Element<'_>) -> Result<Vec<String>, IdentifyError> {
         .ok_or_else(unreadable)?
         .children()?
         .iter()
-        .map(|component| component.text().map(str::to_string))
+        .map(|component| string(component).map(str::to_string))
         .collect::<Option<Vec<_>>>()
         .filter(|components| !components.is_empty())
         .ok_or_else(unreadable)
+}
+
+/// A `KerberosString` (RFC 4120 section 5.2.1): a `GeneralString` read as
+/// UTF-8, `None` where the element is anything else.
+#[must_use]
+pub fn string<'a>(element: &Element<'a>) -> Option<&'a str> {
+    (element.tag == GENERAL_STRING)
+        .then(|| core::str::from_utf8(element.content).ok())
+        .flatten()
+}
+
+/// A `KerberosTime` (RFC 4120 section 5.2.3): a `GeneralizedTime` of whole
+/// seconds in UTC, `YYYYMMDDHHMMSSZ` and no other form, in seconds since
+/// the Unix epoch; `None` where the element is anything else.
+#[must_use]
+pub fn time(element: &Element<'_>) -> Option<i64> {
+    let text = core::str::from_utf8(element.content).ok()?;
+    if element.tag != GENERALIZED_TIME || text.len() != 15 || !text.ends_with('Z') {
+        return None;
+    }
+    if !text.as_bytes()[..14].iter().all(u8::is_ascii_digit) {
+        return None;
+    }
+    let number = |from: usize, to: usize| text.get(from..to)?.parse::<u32>().ok();
+    let moment = CivilTime::new(
+        i64::from(number(0, 4)?),
+        number(4, 6)?,
+        number(6, 8)?,
+        number(8, 10)?,
+        number(10, 12)?,
+        number(12, 14)?,
+    )?;
+    Some(moment.unix())
 }
 
 /// A principal as Kerberos writes one: its components joined by `/`, then
@@ -398,5 +436,32 @@ mod tests {
             written(&components, "EXAMPLE.COM"),
             "host/pc1.example@EXAMPLE.COM"
         );
+    }
+
+    #[test]
+    fn a_kerberos_time_is_whole_seconds_in_utc_and_nothing_else() {
+        let at = |text: &str| {
+            let encoded = tlv(GENERALIZED_TIME, text.as_bytes());
+            time(&Element::read(&encoded).expect("read").0)
+        };
+
+        assert_eq!(at("19700101000000Z"), Some(0));
+        assert_eq!(at("20270115080000Z"), Some(1_800_000_000));
+        assert_eq!(at("20271315080000Z"), None);
+        assert_eq!(at("20270230080000Z"), None, "the thirtieth of February");
+        assert_eq!(at("2027011508+000Z"), None, "a sign is not a digit");
+        assert_eq!(at("2027011508Z"), None);
+        assert_eq!(at("20270115080000.5Z"), None, "fractions of a second");
+    }
+
+    #[test]
+    fn a_kerberos_string_is_a_general_string_read_as_utf8() {
+        let read = |tag: u8, bytes: &[u8]| {
+            let encoded = tlv(tag, bytes);
+            string(&Element::read(&encoded).expect("read").0).map(str::to_string)
+        };
+        assert_eq!(read(GENERAL_STRING, b"HTTP").as_deref(), Some("HTTP"));
+        assert_eq!(read(OCTET_STRING, b"HTTP"), None, "another type");
+        assert_eq!(read(GENERAL_STRING, &[0xff]), None, "not UTF-8");
     }
 }

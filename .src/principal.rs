@@ -1,7 +1,7 @@
 //! User principal names and service principal names, read one way.
 //!
 //! Many mechanisms name the same two things differently. A person or an
-//! account is `jane@partner-x.example` to a directory, `PARTNERX\jane` to an
+//! account is `jane@party-x.example` to a directory, `PARTYX\jane` to an
 //! older Windows logon, a client principal to Kerberos, the `upn` claim to an
 //! identity provider and an alternative name to a smart-card certificate. A
 //! service is `HTTP/xmip.example@EXAMPLE.COM` to Kerberos, a target name to
@@ -254,26 +254,25 @@ mod tests {
 
     #[test]
     fn a_user_principal_name_reads_the_same_from_either_form() {
-        let modern = UserPrincipalName::parse("Jane@Partner-X.Example").expect("a name");
-        let older = UserPrincipalName::parse("PARTNER-X.EXAMPLE\\jane").expect("a name");
+        let modern = UserPrincipalName::parse("Jane@Party-X.Example").expect("a name");
+        let older = UserPrincipalName::parse("PARTY-X.EXAMPLE\\jane").expect("a name");
 
-        assert_eq!(modern.to_string(), "Jane@partner-x.example");
+        assert_eq!(modern.to_string(), "Jane@party-x.example");
         assert_eq!(modern.user(), "Jane");
-        assert_eq!(modern.domain(), "partner-x.example");
+        assert_eq!(modern.domain(), "party-x.example");
         assert!(modern.is(&older), "the same account, written two ways");
         assert_ne!(modern, older, "and still told apart as written");
     }
 
     #[test]
     fn the_last_at_sign_divides_and_a_bare_user_is_not_a_principal_name() {
-        let guest =
-            UserPrincipalName::parse("jane@home.example@partner-x.example").expect("a name");
+        let guest = UserPrincipalName::parse("jane@home.example@party-x.example").expect("a name");
 
         assert_eq!(guest.user(), "jane@home.example");
-        assert_eq!(guest.domain(), "partner-x.example");
+        assert_eq!(guest.domain(), "party-x.example");
         assert!(UserPrincipalName::parse("jane").is_none());
         assert!(UserPrincipalName::parse("jane@").is_none());
-        assert!(UserPrincipalName::parse("@partner-x.example").is_none());
+        assert!(UserPrincipalName::parse("@party-x.example").is_none());
         assert!(UserPrincipalName::parse("jane@bad domain").is_none());
     }
 
@@ -308,12 +307,12 @@ mod tests {
 
     #[test]
     fn text_says_which_kind_it_is_and_where_its_evidence_goes() {
-        let user = PrincipalName::parse("jane@partner-x.example").expect("a user");
+        let user = PrincipalName::parse("jane@party-x.example").expect("a user");
         let service = PrincipalName::parse("HTTP/xmip.example@EXAMPLE.COM").expect("a service");
 
         assert_eq!(user.evidence(), evidence::PRINCIPAL_USER);
         assert_eq!(service.evidence(), evidence::PRINCIPAL_SERVICE);
         assert_eq!(service.to_string(), "HTTP/xmip.example@example.com");
-        assert!(PrincipalName::parse("CN=partner-x.example").is_none());
+        assert!(PrincipalName::parse("CN=party-x.example").is_none());
     }
 }

@@ -155,8 +155,8 @@ impl<'a> StreamArrival<'a> {
 #[derive(Clone, Eq, PartialEq)]
 pub struct Presented {
     pub mechanism: Mechanism,
-    /// The claimed value — `CN=partner-x.example`, `sub=partner-x`,
-    /// `ISA06=PARTNERX`.
+    /// The claimed value — `CN=party-x.example`, `sub=party-x`,
+    /// `ISA06=PARTYX`.
     pub value: String,
     /// Passed, inferred or detected.
     ///
@@ -490,7 +490,7 @@ mod tests {
                 "tls.client.subject".to_string(),
                 "CN=van.example".to_string(),
             ),
-            ("http.header.x-api-key".to_string(), "partner-x".to_string()),
+            ("http.header.x-api-key".to_string(), "party-x".to_string()),
         ];
 
         let claims = identify_transport(
@@ -518,7 +518,7 @@ mod tests {
         let stream = stream(b"<order/>");
         let properties = [(
             "tls.client.subject".to_string(),
-            "CN=partner-x.example".to_string(),
+            "CN=party-x.example".to_string(),
         )];
 
         let claims = identify_transport(
@@ -533,7 +533,7 @@ mod tests {
         .expect("read");
 
         assert_eq!(claims.len(), 1);
-        assert_eq!(claims[0].value, "CN=partner-x.example");
+        assert_eq!(claims[0].value, "CN=party-x.example");
     }
 
     #[test]
@@ -581,19 +581,19 @@ mod tests {
         let envelope = FromEnvelope;
         let identifiers: [&dyn MessageIdentifier; 1] = [&envelope];
 
-        let claims = identify_message(&identifiers, &message(b"ISA*PARTNERX")).expect("read");
+        let claims = identify_message(&identifiers, &message(b"ISA*PARTYX")).expect("read");
 
         assert_eq!(claims.len(), 1);
         assert_eq!(claims[0].layer(), Layer::Message);
-        assert_eq!(claims[0].value, "PARTNERX");
+        assert_eq!(claims[0].value, "PARTYX");
     }
 
     #[test]
     fn a_claim_proves_nothing_by_existing() {
         // The type carries no verdict. Whether the claim holds is the second
         // gate's answer, and nothing here can express it.
-        let claim = Presented::detected(mechanism::edi_x12_interchange(), "PARTNERX")
-            .with_evidence("source", "file:///in/partner-x");
+        let claim = Presented::detected(mechanism::edi_x12_interchange(), "PARTYX")
+            .with_evidence("source", "file:///in/party-x");
 
         assert!(!claim.mechanism.authenticates());
         assert_eq!(claim.evidence.len(), 1);

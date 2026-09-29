@@ -236,12 +236,12 @@ mod tests {
 
     #[test]
     fn a_compact_token_is_split_at_its_two_dots_and_decoded() {
-        let text = token(r#"{"alg":"HS256","kid":"k1"}"#, r#"{"sub":"partner-x"}"#);
+        let text = token(r#"{"alg":"HS256","kid":"k1"}"#, r#"{"sub":"party-x"}"#);
         let compact = Compact::parse(&text).expect("three parts");
 
         assert_eq!(compact.algorithm().as_deref(), Some("HS256"));
         assert_eq!(compact.key_id().as_deref(), Some("k1"));
-        assert_eq!(compact.claim("sub").as_deref(), Some("partner-x"));
+        assert_eq!(compact.claim("sub").as_deref(), Some("party-x"));
         assert_eq!(compact.signature, b"sig");
         assert!(text.starts_with(&compact.signing_input));
     }
@@ -298,18 +298,18 @@ mod tests {
 
     #[test]
     fn a_member_name_is_matched_after_its_escapes_are_undone() {
-        let text = token(r#"{"alg":"none"}"#, r#"{"sub":"partner-x"}"#);
+        let text = token(r#"{"alg":"none"}"#, r#"{"sub":"party-x"}"#);
         let compact = Compact::parse(&text).expect("three parts");
 
         assert_eq!(compact.algorithm().as_deref(), Some("none"));
-        assert_eq!(compact.claim("sub").as_deref(), Some("partner-x"));
+        assert_eq!(compact.claim("sub").as_deref(), Some("party-x"));
     }
 
     #[test]
     fn a_member_named_twice_refuses_the_token_even_behind_an_escape() {
         for claims in [
-            r#"{"sub":"partner-x","sub":"admin"}"#,
-            r#"{"sub":"partner-x","sub":"admin"}"#,
+            r#"{"sub":"party-x","sub":"admin"}"#,
+            r#"{"sub":"party-x","sub":"admin"}"#,
         ] {
             let failure = Compact::parse(&token(r#"{"alg":"none"}"#, claims)).expect_err(claims);
             assert!(failure.message.contains("twice"), "{}", failure.message);

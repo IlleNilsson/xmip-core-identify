@@ -70,21 +70,23 @@ pub use principal::{PrincipalName, ServicePrincipalName, UserPrincipalName};
 
 use message::Message;
 use std::fmt;
-use stream::Stream;
 use xcore::{Arriving, Established, Layer, Mechanism};
 
 /// A Stream arriving, and everything readable about it before a Message exists.
 ///
-/// The Stream, how it got here, where it came from, and whatever the transport
-/// can say about the connection — header values, a certificate subject, a peer
-/// address, the path a file was dropped on.
+/// How it got here, where it came from, and whatever the transport can say
+/// about the connection — header values, a certificate subject, a peer
+/// address, the path a file was dropped on. **Not its content**: the
+/// transport gates run before anything of it is read or kept, so an
+/// identifier cannot parse what an unauthorized sender sent
+/// (`runtime-model.md` section 5), and the type holds that. A mechanism that
+/// needs the content is a message mechanism ([`MessageIdentifier`]).
 ///
 /// Deliberately untyped beyond that. Each transport has its own vocabulary and
 /// each [`TransportIdentifier`] knows which names its mechanism cares about;
 /// enumerating them centrally would mean every new transport editing this
 /// crate.
 pub struct StreamArrival<'a> {
-    stream: &'a Stream,
     arriving: Arriving,
     source_uri: &'a str,
     properties: &'a [(String, String)],
@@ -93,13 +95,11 @@ pub struct StreamArrival<'a> {
 impl<'a> StreamArrival<'a> {
     #[must_use]
     pub const fn new(
-        stream: &'a Stream,
         arriving: Arriving,
         source_uri: &'a str,
         properties: &'a [(String, String)],
     ) -> Self {
         Self {
-            stream,
             arriving,
             source_uri,
             properties,
@@ -114,14 +114,6 @@ impl<'a> StreamArrival<'a> {
     #[must_use]
     pub const fn arriving(&self) -> Arriving {
         self.arriving
-    }
-
-    /// The bytes. Readable, and read by very few identifiers: a mechanism that
-    /// needs the content is usually a message mechanism that has not admitted
-    /// it yet.
-    #[must_use]
-    pub const fn stream(&self) -> &Stream {
-        self.stream
     }
 
     /// Where it came from. The identity of a drop folder is its path, so this
@@ -380,6 +372,7 @@ mod tests {
     use message::{
         ExecutionProfile, MessageDurability, MessagePriority, MessageSection, MessageTreatment,
     };
+    use stream::Stream;
     use xcore::{MessageId, SectionId, StreamId, mechanism};
 
     /// Reads one named transport property and calls it the claim.
@@ -484,7 +477,6 @@ mod tests {
         let key = api_key();
         let identifiers: [&dyn TransportIdentifier; 2] = [&certificate, &key];
 
-        let stream = stream(b"<order/>");
         let properties = [
             (
                 "tls.client.subject".to_string(),
@@ -496,7 +488,6 @@ mod tests {
         let claims = identify_transport(
             &identifiers,
             &StreamArrival::new(
-                &stream,
                 Arriving::Pushed,
                 "https://xmip.example/invoices",
                 &properties,
@@ -515,7 +506,6 @@ mod tests {
         let key = api_key();
         let identifiers: [&dyn TransportIdentifier; 2] = [&certificate, &key];
 
-        let stream = stream(b"<order/>");
         let properties = [(
             "tls.client.subject".to_string(),
             "CN=party-x.example".to_string(),
@@ -524,7 +514,6 @@ mod tests {
         let claims = identify_transport(
             &identifiers,
             &StreamArrival::new(
-                &stream,
                 Arriving::Pushed,
                 "https://xmip.example/invoices",
                 &properties,
@@ -542,12 +531,11 @@ mod tests {
         // the identity later, and that is the runtime's decision to make.
         let certificate = tls();
         let identifiers: [&dyn TransportIdentifier; 1] = [&certificate];
-        let stream = stream(b"<order/>");
 
         assert!(
             identify_transport(
                 &identifiers,
-                &StreamArrival::new(&stream, Arriving::Pushed, "file:///in/x", &[])
+                &StreamArrival::new(Arriving::Pushed, "file:///in/x", &[])
             )
             .expect("read")
             .is_empty()
@@ -561,11 +549,10 @@ mod tests {
         // on.
         let broken = Broken;
         let identifiers: [&dyn TransportIdentifier; 1] = [&broken];
-        let stream = stream(b"<order/>");
 
         let failure = identify_transport(
             &identifiers,
-            &StreamArrival::new(&stream, Arriving::Pushed, "file:///in/x", &[]),
+            &StreamArrival::new(Arriving::Pushed, "file:///in/x", &[]),
         )
         .expect_err("should fail");
 

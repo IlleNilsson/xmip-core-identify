@@ -243,6 +243,17 @@ impl Presented {
             .map(|(_, value)| value.as_str())
     }
 
+    /// The claim as a record may keep it: its mechanism, value, provenance
+    /// and evidence, and no proof — what outlives the gate, a refusal
+    /// audited among them.
+    #[must_use]
+    pub fn without_proof(&self) -> Self {
+        Self {
+            proof: Vec::new(),
+            ..self.clone()
+        }
+    }
+
     /// Which gate produced it. Comes from the mechanism, so a claim cannot
     /// misreport the layer it was read at.
     #[must_use]
@@ -467,6 +478,20 @@ mod tests {
                 durability: MessageDurability::Recoverable,
             },
         )
+    }
+
+    #[test]
+    fn a_claim_kept_past_the_gate_keeps_its_provenance_and_drops_its_proof() {
+        let presented = Presented::passed(xcore::mechanism::username(), "c1")
+            .with_evidence("source", "http.header.authorization")
+            .with_proof("basic.credential", "secret");
+        let kept = presented.without_proof();
+        assert_eq!(kept.proof("basic.credential"), None);
+        assert_eq!(kept.evidence("source"), Some("http.header.authorization"));
+        assert_eq!(
+            (kept.value.as_str(), kept.established, kept.layer()),
+            ("c1", presented.established, Layer::Transport)
+        );
     }
 
     #[test]

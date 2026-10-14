@@ -557,13 +557,13 @@ mod tests {
         let certificate = tls();
         let identifiers: [&dyn TransportIdentifier; 1] = [&certificate];
 
-        assert!(
+        assert_eq!(
             identify_transport(
                 &identifiers,
                 &StreamArrival::new(Arriving::Pushed, "file:///in/x", &[])
             )
-            .expect("read")
-            .is_empty()
+            .expect("read"),
+            [] as [Presented; 0]
         );
     }
 

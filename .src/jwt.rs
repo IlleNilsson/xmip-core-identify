@@ -329,7 +329,7 @@ mod tests {
         );
         let compact = Compact::parse(&text).expect("three parts");
 
-        assert!(compact.strings_claim("aud").is_empty());
+        assert_eq!(compact.strings_claim("aud"), [] as [String; 0]);
         assert_eq!(compact.numeric_claim("exp"), Some(1_700_000_000));
         assert_eq!(compact.claim("sub"), None, "a number is not a string");
     }

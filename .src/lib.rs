@@ -302,14 +302,14 @@ pub trait TransportIdentifier: Send + Sync {
     fn mechanism(&self) -> Mechanism;
 
     /// The claim, or `None` where this arrival carries nothing this mechanism
-    /// recognises.
+    /// recognizes.
     ///
     /// `None` is ordinary and not a failure: most identifiers see most arrivals
     /// and have nothing to say about them.
     ///
     /// # Errors
     ///
-    /// Where the arrival carries something this mechanism recognises and cannot
+    /// Where the arrival carries something this mechanism recognizes and cannot
     /// read — a malformed certificate, a truncated header. Different from
     /// carrying nothing, and an operator acts on the difference.
     fn identify(&self, arrival: &StreamArrival<'_>) -> Result<Option<Presented>, IdentifyError>;
@@ -526,7 +526,7 @@ mod tests {
 
     #[test]
     fn an_identifier_with_nothing_to_say_is_not_a_failure() {
-        // Most identifiers see most arrivals and recognise nothing in them.
+        // Most identifiers see most arrivals and recognize nothing in them.
         let certificate = tls();
         let key = api_key();
         let identifiers: [&dyn TransportIdentifier; 2] = [&certificate, &key];

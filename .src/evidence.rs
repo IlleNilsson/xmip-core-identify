@@ -65,6 +65,9 @@ pub const MUTUAL_TLS_HANDSHAKE: &str = "mutual-tls.handshake";
 /// The transport's word that its connection proved the broker that
 /// delivered a message (`context::property::BROKER_VERIFIED`).
 pub const BROKER_CONNECTION: &str = "broker.connection";
+/// The node's word that the operating system named the account a local
+/// endpoint's peer runs as (`authenticate::PeerCredentials`).
+pub const PEER_CREDENTIALS_SYSTEM: &str = "peer-credentials.system";
 /// The signature an SSH peer made with its key.
 pub const SSH_KEY_SIGNATURE: &str = "ssh-key.signature";
 /// What that signature covers: RFC 4252's signed data, which opens with
@@ -96,6 +99,7 @@ mod tests {
             CERTIFICATE_CHAIN,
             MUTUAL_TLS_HANDSHAKE,
             BROKER_CONNECTION,
+            PEER_CREDENTIALS_SYSTEM,
             SSH_KEY_SIGNATURE,
             SSH_KEY_SESSION,
         ];

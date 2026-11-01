@@ -60,6 +60,7 @@
 
 pub mod api_key;
 pub mod authorization;
+pub mod broker;
 pub mod evidence;
 pub mod jwt;
 pub mod kerberos;

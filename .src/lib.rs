@@ -61,12 +61,14 @@
 pub mod api_key;
 pub mod authorization;
 pub mod broker;
+mod content;
 pub mod evidence;
 pub mod jwt;
 pub mod kerberos;
 pub mod principal;
 pub mod saml;
 
+pub use content::text;
 pub use principal::{PrincipalName, ServicePrincipalName, UserPrincipalName};
 
 use message::Message;
@@ -417,7 +419,7 @@ mod tests {
         }
 
         fn identify(&self, message: &Message) -> Result<Option<Presented>, IdentifyError> {
-            let bytes = message.sections()[0].stream.bytes();
+            let bytes = message.sections()[0].stream.load()?;
             let text = core::str::from_utf8(bytes).map_err(|_| IdentifyError {
                 message: "the interchange envelope is not text".to_string(),
             })?;

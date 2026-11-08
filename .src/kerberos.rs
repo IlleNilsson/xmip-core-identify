@@ -6,7 +6,8 @@
 //! AP-REQ ::= [APPLICATION 14] SEQUENCE {
 //!     pvno [0] INTEGER (5),   msg-type [1] INTEGER (14),   ap-options [2],
 //!     ticket [3] Ticket,                                   <- read
-//!     authenticator [4] EncryptedData }                    <- sealed: holds cname
+//!     authenticator [4] EncryptedData }                    <- etype and cipher read;
+//!                                                             sealed under the session key
 //! Ticket ::= [APPLICATION 1] SEQUENCE {
 //!     tkt-vno [0] INTEGER (5),
 //!     realm [1] Realm,  sname [2] PrincipalName,           <- read
@@ -68,6 +69,39 @@ pub struct Ticket {
     /// The sealed `enc-part` cipher, for the node's key to open. It holds the
     /// client principal.
     pub cipher: Vec<u8>,
+    /// The AP-REQ's authenticator, sealed under the ticket's session key.
+    pub authenticator: Sealed,
+}
+
+/// An `EncryptedData` (RFC 4120 section 5.2.9): its type and the cipher.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Sealed {
+    /// The encryption type: 18 is `aes256-cts-hmac-sha1-96`.
+    pub encryption_type: u32,
+    /// The version of the key, where the sender said.
+    pub key_version: Option<u32>,
+    /// The cipher.
+    pub cipher: Vec<u8>,
+}
+
+impl Sealed {
+    /// Read an `EncryptedData`; `what` names it in a refusal.
+    ///
+    /// # Errors
+    /// Where it has no encryption type or no cipher.
+    pub fn read(sealed: &Element<'_>, what: &str) -> Result<Self, IdentifyError> {
+        Ok(Self {
+            encryption_type: required(sealed, 0, &format!("encryption type on its {what}"))?
+                .integer()
+                .ok_or_else(|| {
+                    IdentifyError::new(format!("the {what}'s encryption type is not read"))
+                })?,
+            key_version: sealed.field(1)?.and_then(|kvno| kvno.integer()),
+            cipher: required(sealed, 2, &format!("cipher in its {what}"))?
+                .content
+                .to_vec(),
+        })
+    }
 }
 
 impl Ticket {
@@ -174,18 +208,20 @@ impl Ticket {
             .filter(|realm| !realm.is_empty())
             .ok_or_else(|| IdentifyError::new("the ticket's realm is not readable"))?;
         let service = principal(required(&ticket, 2, "service name in its ticket")?)?;
-        let sealed = required(&ticket, 3, "sealed part in its ticket")?;
+        let sealed = Sealed::read(
+            &required(&ticket, 3, "sealed part in its ticket")?,
+            "ticket",
+        )?;
+        let authenticator =
+            Sealed::read(&required(&request, 4, "authenticator")?, "authenticator")?;
 
         Ok(Self {
             realm: realm.to_string(),
             service,
-            encryption_type: required(&sealed, 0, "encryption type on its ticket")?
-                .integer()
-                .ok_or_else(|| IdentifyError::new("the ticket's encryption type is not read"))?,
-            key_version: sealed.field(1)?.and_then(|kvno| kvno.integer()),
-            cipher: required(&sealed, 2, "cipher in its ticket")?
-                .content
-                .to_vec(),
+            encryption_type: sealed.encryption_type,
+            key_version: sealed.key_version,
+            cipher: sealed.cipher,
+            authenticator,
         })
     }
 }
@@ -293,22 +329,40 @@ pub mod fixture {
     }
 
     /// A bare AP-REQ whose ticket is for `service` in `realm`, sealed as
-    /// `aes256-cts-hmac-sha1-96` at key version 3 into `cipher`.
+    /// `aes256-cts-hmac-sha1-96` at key version 3 into `cipher`, with an
+    /// empty authenticator.
     #[must_use]
     pub fn ap_req(service: &[&str], realm: &str, cipher: &[u8]) -> Vec<u8> {
-        let mut sealed = field(0, &tlv(INTEGER, &[18]));
-        sealed.extend(field(1, &tlv(INTEGER, &[3])));
-        sealed.extend(field(2, &tlv(OCTET_STRING, cipher)));
+        ap_req_with(service, realm, cipher, &[])
+    }
+
+    /// The same, the authenticator sealed as `aes256-cts-hmac-sha1-96` into
+    /// `authenticator`.
+    #[must_use]
+    pub fn ap_req_with(
+        service: &[&str],
+        realm: &str,
+        cipher: &[u8],
+        authenticator: &[u8],
+    ) -> Vec<u8> {
+        let sealed = |kvno: Option<u8>, cipher: &[u8]| {
+            let mut sealed = field(0, &tlv(INTEGER, &[18]));
+            if let Some(kvno) = kvno {
+                sealed.extend(field(1, &tlv(INTEGER, &[kvno])));
+            }
+            sealed.extend(field(2, &tlv(OCTET_STRING, cipher)));
+            tlv(SEQUENCE, &sealed)
+        };
         let mut ticket = field(0, &tlv(INTEGER, &[5]));
         ticket.extend(field(1, &tlv(GENERAL_STRING, realm.as_bytes())));
         ticket.extend(field(2, &principal_name(service)));
-        ticket.extend(field(3, &tlv(SEQUENCE, &sealed)));
+        ticket.extend(field(3, &sealed(Some(3), cipher)));
         let ticket = tlv(application(TICKET), &tlv(SEQUENCE, &ticket));
         let mut request = field(0, &tlv(INTEGER, &[5]));
         request.extend(field(1, &tlv(INTEGER, &[AP_REQ])));
         request.extend(field(2, &tlv(0x03, &[0, 0, 0, 0, 0])));
         request.extend(field(3, &ticket));
-        request.extend(field(4, &tlv(SEQUENCE, &[])));
+        request.extend(field(4, &sealed(None, authenticator)));
         tlv(application(AP_REQ), &tlv(SEQUENCE, &request))
     }
 
@@ -363,6 +417,17 @@ mod tests {
         assert_eq!(ticket.encryption_type, 18);
         assert_eq!(ticket.key_version, Some(3));
         assert_eq!(ticket.cipher, b"sealed:alice");
+
+        let with = fixture::ap_req_with(&["HTTP", "h"], "R", b"t", b"sealed:now");
+        let authenticator = Ticket::parse(&with).expect("an AP-REQ").authenticator;
+        assert_eq!(
+            authenticator,
+            Sealed {
+                encryption_type: 18,
+                key_version: None,
+                cipher: b"sealed:now".to_vec(),
+            }
+        );
     }
 
     #[test]

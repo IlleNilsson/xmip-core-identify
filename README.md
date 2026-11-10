@@ -10,7 +10,7 @@ identifies and never authenticates, and a record that cannot tell a claim from
 a proof cannot settle a dispute. It does not know the Party.
 
 ADR-0019 orders the three gates and ADR-0050 makes each technology under this
-repository one mechanism at this gate; `architecture.xmip` names them.
+repository one mechanism at this gate; `architecture.toml` names them.
 
 ## What both gates read, read once
 

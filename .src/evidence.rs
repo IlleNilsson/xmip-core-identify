@@ -60,6 +60,20 @@ pub const KERBEROS_AP_REQ: &str = "kerberos.ap-req";
 pub const NTLM_AUTHENTICATE: &str = "ntlm.authenticate";
 /// The peer's certificate chain, PEM, where no handshake proved it.
 pub const CERTIFICATE_CHAIN: &str = "certificate.chain";
+/// The signature the chain's leaf key made over [`CERTIFICATE_SIGNED`],
+/// base64: the one proof that the sender holds the certificate's key, which
+/// a chain alone, anyone's to forward, never is.
+pub const CERTIFICATE_SIGNATURE: &str = "certificate.signature";
+/// What that signature covers, base64: a CMS SignerInfo's signed attributes
+/// as they are signed, a DER `SET` (RFC 5652 section 5.4), which carry the
+/// `messageDigest` of the content — a few hundred bytes, never the content.
+pub const CERTIFICATE_SIGNED: &str = "certificate.signed";
+/// The digest of the content this arrival carried, base64, which the
+/// transport measured over what it received, in the algorithm the signer
+/// named, and never copied from anything the sender wrote. The signed
+/// `messageDigest` must be this, so a signature the holder made over an
+/// earlier arrival is refused here (ADR-0019, amendment 2026-11-11).
+pub const CERTIFICATE_DIGEST: &str = "certificate.digest";
 /// The transport's word that its handshake proved the peer's chain.
 pub const MUTUAL_TLS_HANDSHAKE: &str = "mutual-tls.handshake";
 /// The transport's word that its connection proved the broker that
@@ -97,6 +111,9 @@ mod tests {
             KERBEROS_AP_REQ,
             NTLM_AUTHENTICATE,
             CERTIFICATE_CHAIN,
+            CERTIFICATE_SIGNATURE,
+            CERTIFICATE_SIGNED,
+            CERTIFICATE_DIGEST,
             MUTUAL_TLS_HANDSHAKE,
             BROKER_CONNECTION,
             PEER_CREDENTIALS_SYSTEM,

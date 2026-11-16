@@ -295,6 +295,13 @@ impl From<asn1::Asn1Error> for IdentifyError {
     }
 }
 
+/// A JOSE token that is not what it says it is, in what a technology reads.
+impl From<jose::JoseError> for IdentifyError {
+    fn from(error: jose::JoseError) -> Self {
+        Self::new(error.message)
+    }
+}
+
 /// Reads one mechanism's claim off the connection, before a Message exists.
 ///
 /// `xmip-core-identify-certificate`, `-header`, `-ip`, `-dns`, `-endpoint`,

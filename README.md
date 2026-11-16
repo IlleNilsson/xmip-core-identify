@@ -31,8 +31,12 @@ both call it:
   this crate's (ADR-0019, amendment 2026-09-24).
 - `principal` — user and service principal names, read and compared one way
   (ADR-0054).
-- `jwt` — a compact token's parts and claims, its header and claims set read with
-  `serde_json`; a member name that appears twice, escaped or not, refuses the token.
+- `jwt` — the compact token a property carries, under its scheme or bare,
+  and the principal name its claims name (ADR-0054). The token itself — its
+  parts, its base64url, its claims set with every member named once — is
+  `xmip-core-library-jose`'s (`jose::jwt::Token`), the one read the second
+  gate verifies too, and this crate's error takes its failures with `From`
+  (ADR-0050, amendment 2026-11-16).
 - `kerberos` — the `Negotiate` token to its AP-REQ's ticket: SPNEGO, GSS-API
   or bare, the service, the realm, the sealed cipher.
 - `saml` — an assertion's base64 and the principal it names.

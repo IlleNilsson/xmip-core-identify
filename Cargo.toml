@@ -11,22 +11,22 @@ description = "The Xmip identification gate: read the claim out of an arrival."
 path = ".src/lib.rs"
 
 [dependencies]
-xcore = { package = "xmip-core", git = "https://github.com/IlleNilsson/xmip-core", branch = "main" }
-stream = { package = "xmip-core-stream", git = "https://github.com/IlleNilsson/xmip-core-stream", branch = "main" }
-message = { package = "xmip-core-message", git = "https://github.com/IlleNilsson/xmip-core-message", branch = "main" }
-context = { package = "xmip-core-context", git = "https://github.com/IlleNilsson/xmip-core-context", branch = "main" }
+xcore = { workspace = true }
+stream = { workspace = true }
+message = { workspace = true }
+context = { workspace = true }
 # X.690, for the conversion that lets a technology reading a Kerberos token
 # with it write `?`.
-asn1 = { package = "xmip-core-library-asn1", git = "https://github.com/IlleNilsson/xmip-core-library-asn1", branch = "main" }
+asn1 = { workspace = true }
 # Encoding primitives, whose failures this crate's error takes with `From`.
-codec = { package = "xmip-core-library-codec", git = "https://github.com/IlleNilsson/xmip-core-library-codec", branch = "main" }
+codec = { workspace = true }
 # The NTLM message layout, whose failures this crate's error takes with `From`.
-ntlm = { package = "xmip-core-library-ntlm", git = "https://github.com/IlleNilsson/xmip-core-library-ntlm", branch = "main" }
+ntlm = { workspace = true }
 # JOSE, the estate's one copy: the token a property carries and the claims a
 # principal name is read from (jwt.rs), and the failures this crate's error
 # takes with `From`. Its keys stay off: this gate verifies nothing.
-jose = { package = "xmip-core-library-jose", git = "https://github.com/IlleNilsson/xmip-core-library-jose", branch = "main" }
+jose = { workspace = true }
 # Network primitives, whose failures this crate's error takes with `From`.
-net = { package = "xmip-core-library-net", git = "https://github.com/IlleNilsson/xmip-core-library-net", branch = "main" }
+net = { workspace = true }
 
 [lints]
